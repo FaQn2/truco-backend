@@ -1,0 +1,111 @@
+# Backend — Truco Argentino Online
+
+Servidor autoritario Node.js + WebSockets. **Fase 2, Etapa 1**: corre en
+`localhost`, todavía no hay deploy a un hosting real (eso es la Etapa 2,
+ver `docs/FASE_2_MULTIPLAYER_PLAN.md`).
+
+El servidor nunca confía en el cliente: valida cada jugada, y cada jugador
+recibe únicamente sus propias cartas (nunca las del rival, ni siquiera en
+el JSON de la sala).
+
+## Instalación
+
+```bash
+cd backend
+npm install
+```
+
+## Correr el servidor
+
+```bash
+npm start
+# o directamente:
+node server.js
+```
+
+Por defecto escucha en `ws://localhost:3000`. Para usar otro puerto:
+
+```bash
+# PowerShell
+$env:PORT = 4000; node server.js
+
+# bash
+PORT=4000 node server.js
+```
+
+## Probar el backend aislado (sin Godot)
+
+`test-client.js` simula DOS clientes con el protocolo WebSocket real: uno
+crea una sala, el otro se une con el código, y juegan una mano completa
+automáticamente (tiran la primera carta de su mano en cada turno, sin
+cantar Envido/Truco). Todo se imprime por consola — sirve para confirmar
+que la lógica de salas + reglas del Truco funciona antes de meter la
+complejidad del cliente 3D.
+
+**Con el servidor corriendo en otra terminal:**
+
+```bash
+node test-client.js
+```
+
+Si usaste un puerto distinto de 3000 para el servidor, pasale el mismo acá:
+
+```bash
+PORT=4000 node test-client.js
+```
+
+Salida esperada: los dos clientes (`[A]` y `[B]`) se conectan, reparten
+mano, tiran cartas, resuelven rondas, y al final se ve
+`✅ Test OK: se jugó una mano completa de punta a punta.`
+
+## Estructura
+
+```
+backend/
+├── server.js                        ← punto de entrada, levanta el WebSocketServer
+├── src/
+│   ├── game-logic/                  ← puerto 1:1 de scripts/core/*.gd a JS
+│   │   ├── constants.js
+│   │   ├── mazo.js
+│   │   ├── state_machine.js
+│   │   ├── calculador_envido.js
+│   │   ├── validador_cantos.js
+│   │   └── partida.js               ← orquestador de una mano/partida (equivalente
+│   │                                   servidor de game_manager.gd, pero para 2
+│   │                                   jugadores humanos en vez de Jugador vs IA)
+│   └── socket-handlers/
+│       ├── room-manager.js          ← crear/unirse a salas, código de 4 caracteres
+│       └── connection-handler.js    ← parsea mensajes JSON y despacha acciones
+└── test-client.js
+```
+
+## Protocolo (mensajes JSON sobre WebSocket)
+
+### Cliente → Servidor
+
+| type | campos | notas |
+|---|---|---|
+| `CREAR_SALA` | `nombre`, `puntosObjetivo?` | crea una sala nueva, responde `SALA_CREADA` |
+| `UNIRSE_SALA` | `code`, `nombre` | se une a una sala existente, responde `SALA_UNIDA` |
+| `JUGAR_CARTA` | `cardId` | tira una carta de la propia mano |
+| `CANTAR_ENVIDO` | `tipo` (`ENVIDO`\|`REAL_ENVIDO`\|`FALTA_ENVIDO`) | abre la cadena de Envido |
+| `ESCALAR_ENVIDO` | `tipo` | sube una cadena de Envido ya abierta |
+| `RESPONDER_ENVIDO` | `quiero` (bool) | responde Quiero/No Quiero al Envido |
+| `CANTAR_TRUCO` | — | primer canto de Truco de la mano |
+| `SUBIR_TRUCO` | — | sube Truco→Retruco→Vale Cuatro (solo quien tiene el "quiero") |
+| `RESPONDER_TRUCO` | `quiero` (bool), `subir?` (bool) | responde al Truco, opcionalmente subiendo |
+| `IRSE_AL_MAZO` | — | se va al mazo |
+
+### Servidor → Cliente
+
+`SALA_CREADA`, `SALA_UNIDA`, `RIVAL_CONECTADO`, `RIVAL_DESCONECTADO`,
+`PARTIDA_INICIADA`, `MANO_REPARTIDA` (solo tu propia mano),
+`TURNO_CAMBIADO`, `CARTA_JUGADA`, `RONDA_RESUELTA`, `MANO_TERMINADA`,
+`PARTIDA_TERMINADA`, `PUNTOS_ACTUALIZADOS`, `CANTO_REALIZADO`,
+`ESTADO_CAMBIADO`, `ENVIDO_TERMINADO` (revela puntajes, nunca las cartas
+del rival), `ERROR`.
+
+El asiento (`seat`, `0` o `1`) que te asigna el servidor al crear/unirse a
+la sala es tu identidad para toda la partida — el servidor lo usa para
+validar cada acción, así que nunca hace falta (ni sirve) mandar un id de
+jugador en los mensajes de juego.

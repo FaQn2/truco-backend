@@ -1,0 +1,14 @@
+{
+  "name": "truco-argentino-backend",
+  "version": "0.1.0",
+  "description": "Servidor autoritario Node.js + WebSockets para Truco Argentino Online (Fase 2, Etapa 1: localhost)",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test-client": "node test-client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
