@@ -85,8 +85,12 @@ backend/
 
 | type | campos | notas |
 |---|---|---|
-| `CREAR_SALA` | `nombre`, `puntosObjetivo?` | crea una sala nueva, responde `SALA_CREADA` |
-| `UNIRSE_SALA` | `code`, `nombre` | se une a una sala existente, responde `SALA_UNIDA` |
+| `CREAR_SALA` | `nombreSala`, `modo` (`1v1`\|`2v2`), `nombre`, `puntosObjetivo?` | crea una sala nueva y sienta al creador en el asiento 0, responde `SALA_CREADA` + `DETALLE_SALA` |
+| `LISTAR_SALAS` | `modo?` | pide el buscador de salas abiertas (no llenas, no en juego), responde `LISTA_SALAS` |
+| `VER_SALA` | `code` | abre el panel de detalle en vivo de una sala (te suscribe a sus actualizaciones), responde `DETALLE_SALA` |
+| `ELEGIR_ASIENTO` | `code`, `asiento` (índice), `nombre` | ocupa un asiento libre de la sala; si la sala es 1v1 y queda llena, arranca la partida | 
+| `DEJAR_ASIENTO` | `code` | libera el asiento propio sin salir de la sala |
+| `SALIR_SALA` | — | deja de ver/ocupar la sala actual (botón "Volver") |
 | `JUGAR_CARTA` | `cardId` | tira una carta de la propia mano |
 | `CANTAR_ENVIDO` | `tipo` (`ENVIDO`\|`REAL_ENVIDO`\|`FALTA_ENVIDO`) | abre la cadena de Envido |
 | `ESCALAR_ENVIDO` | `tipo` | sube una cadena de Envido ya abierta |
@@ -98,14 +102,24 @@ backend/
 
 ### Servidor → Cliente
 
-`SALA_CREADA`, `SALA_UNIDA`, `RIVAL_CONECTADO`, `RIVAL_DESCONECTADO`,
-`PARTIDA_INICIADA`, `MANO_REPARTIDA` (solo tu propia mano),
-`TURNO_CAMBIADO`, `CARTA_JUGADA`, `RONDA_RESUELTA`, `MANO_TERMINADA`,
-`PARTIDA_TERMINADA`, `PUNTOS_ACTUALIZADOS`, `CANTO_REALIZADO`,
-`ESTADO_CAMBIADO`, `ENVIDO_TERMINADO` (revela puntajes, nunca las cartas
-del rival), `ERROR`.
+`SALA_CREADA`, `LISTA_SALAS`, `DETALLE_SALA` (foto del estado de una sala:
+`code`, `nombreSala`, `modo`, `capacidad`, `estado` — `esperando`/`completa`/
+`jugando` —, `asientos: [{index, ocupado, nombre}]`; se manda una vez al
+pedir `VER_SALA`/`ELEGIR_ASIENTO` y de nuevo cada vez que cambia mientras la
+estés viendo), `ASIENTO_CONFIRMADO` (`code`, `asiento` — respuesta directa a
+quien pidió `ELEGIR_ASIENTO`, así sabe cuál asiento es el suyo dentro del
+snapshot genérico de `DETALLE_SALA`), `PARTIDA_INICIADA`, `MANO_REPARTIDA`
+(solo tu propia mano), `TURNO_CAMBIADO`, `CARTA_JUGADA`, `RONDA_RESUELTA`,
+`MANO_TERMINADA`, `PARTIDA_TERMINADA`, `PUNTOS_ACTUALIZADOS`,
+`CANTO_REALIZADO`, `ESTADO_CAMBIADO`, `ENVIDO_TERMINADO` (revela puntajes,
+nunca las cartas del rival), `ERROR`.
 
-El asiento (`seat`, `0` o `1`) que te asigna el servidor al crear/unirse a
-la sala es tu identidad para toda la partida — el servidor lo usa para
-validar cada acción, así que nunca hace falta (ni sirve) mandar un id de
-jugador en los mensajes de juego.
+El asiento (`seat`, índice `0..capacidad-1`) que confirma el servidor en
+`ASIENTO_CONFIRMADO` es tu identidad para toda la partida — el servidor lo
+usa para validar cada acción, así que nunca hace falta (ni sirve) mandar un
+id de jugador en los mensajes de juego.
+
+`PARTIDA_INICIADA` (y todo el protocolo de juego que sigue) solo se dispara
+hoy para salas en modo `1v1` (2 asientos) — es el único modo que el motor
+(`partida.js`) sabe jugar. Una sala `2v2` que completa sus 4 asientos queda
+en `estado: 'completa'` esperando un motor de juego para ese modo.

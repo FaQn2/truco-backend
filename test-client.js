@@ -5,9 +5,9 @@
 //      lógica de salas + Partida funciona de punta a punta ANTES de
 //      meter la complejidad del cliente 3D.
 //
-//      "Jugador A" crea una sala, "Jugador B" se une con el código, y
-//      ambos juegan cartas automáticamente (la primera de su mano en
-//      cada turno, sin cantar Envido/Truco) hasta que termina la
+//      "Jugador A" crea una sala 1v1, "Jugador B" la ve y elige el asiento
+//      libre, y ambos juegan cartas automáticamente (la primera de su mano
+//      en cada turno, sin cantar Envido/Truco) hasta que termina la
 //      primera mano. Todo se imprime por consola.
 //
 // Uso:  node test-client.js            (contra ws://localhost:3000)
@@ -49,13 +49,15 @@ class ClienteDePrueba {
         if (this.onSalaCreada) this.onSalaCreada(msg.code);
         break;
 
-      case 'SALA_UNIDA':
-        this.seat = msg.seat;
-        this._log(`Me uní a la sala ${msg.code} (yo soy el asiento ${msg.seat})`);
+      case 'DETALLE_SALA':
+        this._log(
+          `Detalle de sala ${msg.code}: ${msg.asientos.map((a) => (a.ocupado ? a.nombre : 'libre')).join(' | ')}`
+        );
         break;
 
-      case 'RIVAL_CONECTADO':
-        this._log(`Se unió el rival: ${msg.nombre}`);
+      case 'ASIENTO_CONFIRMADO':
+        this.seat = msg.asiento;
+        this._log(`Elegí el asiento ${msg.asiento} en la sala ${msg.code}`);
         break;
 
       case 'PARTIDA_INICIADA':
@@ -123,10 +125,11 @@ async function main() {
 
   const codigoSala = await new Promise((resolve) => {
     jugadorA.onSalaCreada = resolve;
-    jugadorA.enviar({ type: 'CREAR_SALA', nombre: 'Jugador A' });
+    jugadorA.enviar({ type: 'CREAR_SALA', nombreSala: 'Mesa de prueba', modo: '1v1', nombre: 'Jugador A' });
   });
 
-  jugadorB.enviar({ type: 'UNIRSE_SALA', code: codigoSala, nombre: 'Jugador B' });
+  jugadorB.enviar({ type: 'VER_SALA', code: codigoSala });
+  jugadorB.enviar({ type: 'ELEGIR_ASIENTO', code: codigoSala, asiento: 1, nombre: 'Jugador B' });
 
   const primeraManoTerminada = new Promise((resolve) => {
     jugadorA.onManoTerminada = resolve;

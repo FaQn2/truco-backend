@@ -3,9 +3,8 @@
 // Rol: Parsea los mensajes JSON entrantes de cada socket y los despacha
 //      al RoomManager / a la Partida de la sala. El servidor es la ÚNICA
 //      fuente de verdad: el "jugadorId" de cada acción es SIEMPRE ws.seat
-//      (asignado por el servidor al crear/unirse a la sala), nunca un
-//      valor que mande el cliente — así un cliente no puede jugar en
-//      nombre del rival.
+//      (asignado por el servidor al elegir asiento), nunca un valor que
+//      mande el cliente — así un cliente no puede jugar en nombre del rival.
 // ============================================================
 
 function enviar(ws, mensaje) {
@@ -95,11 +94,32 @@ function manejarMensaje(roomManager, ws, data) {
 
   switch (mensaje.type) {
     case 'CREAR_SALA':
-      roomManager.crearSala(ws, mensaje.nombre, mensaje.puntosObjetivo);
+      roomManager.crearSala(ws, {
+        nombreSala: mensaje.nombreSala,
+        modo: mensaje.modo,
+        nombreJugador: mensaje.nombre,
+        puntosObjetivo: mensaje.puntosObjetivo,
+      });
       return;
 
-    case 'UNIRSE_SALA':
-      roomManager.unirseSala(ws, mensaje.code, mensaje.nombre);
+    case 'LISTAR_SALAS':
+      enviar(ws, { type: 'LISTA_SALAS', salas: roomManager.listarSalas(mensaje.modo) });
+      return;
+
+    case 'VER_SALA':
+      roomManager.verSala(ws, mensaje.code);
+      return;
+
+    case 'ELEGIR_ASIENTO':
+      roomManager.elegirAsiento(ws, mensaje.code, mensaje.asiento, mensaje.nombre);
+      return;
+
+    case 'DEJAR_ASIENTO':
+      roomManager.dejarAsiento(ws, mensaje.code);
+      return;
+
+    case 'SALIR_SALA':
+      roomManager.salirSala(ws);
       return;
 
     default:
