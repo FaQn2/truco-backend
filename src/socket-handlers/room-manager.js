@@ -71,7 +71,7 @@ class Room {
 
     partida.on('manoRepartida', (manoPorAsiento) => {
       for (const seat of [JUGADOR1, JUGADOR2]) {
-        enviar(this.wsDe(seat), { type: 'MANO_REPARTIDA', mano: manoPorAsiento[seat] });
+        enviar(this.wsDe(seat), { type: 'MANO_REPARTIDA', mano: manoPorAsiento[seat], repartidor: partida.repartidor });
       }
     });
 
@@ -114,7 +114,11 @@ class Room {
       this.broadcast({ type: 'ENVIDO_TERMINADO', puntosJ1, puntosJ2, ganador, puntosEnJuego, revelado });
     });
 
-    this.broadcast({ type: 'PARTIDA_INICIADA', puntosObjetivo: this.puntosObjetivo });
+    const nombres = {
+      [JUGADOR1]: this.jugadores[JUGADOR1]?.nombre,
+      [JUGADOR2]: this.jugadores[JUGADOR2]?.nombre,
+    };
+    this.broadcast({ type: 'PARTIDA_INICIADA', puntosObjetivo: this.puntosObjetivo, nombres });
     partida.iniciarPartida();
   }
 

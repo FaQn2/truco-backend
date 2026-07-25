@@ -243,6 +243,10 @@ class Partida extends EventEmitter {
     // Si se está interrumpiendo un Truco sin responder, solo puede hacerlo
     // el jugador contrario al que cantó ese Truco (sección 6).
     if (interrumpeTruco && jugadorId === this._quienCantoTruco) return false;
+    // Fuera de una interrupción, solo puede abrir el Envido quien tiene el
+    // turno (docs/Reglas_Truco_Argentino.md sección 6: "el jugador solo
+    // puede cantar cuando es su turno de tirar o cantar").
+    if (!interrumpeTruco && jugadorId !== this.turnoActual) return false;
     if (!puedeCantar(tipo, estado, true, this.rondaActual, this.envidoResuelto)) return false;
 
     this._trucoInterrumpidoPorEnvido = interrumpeTruco;
@@ -362,6 +366,9 @@ class Partida extends EventEmitter {
       // (Retruco/Vale Cuatro vía subirTruco), no "cantar Truco" de nuevo.
       return false;
     }
+    // Solo puede abrir el Truco quien tiene el turno (misma regla que el
+    // Envido — sección 8: "el jugador solo puede cantar cuando es su turno").
+    if (jugadorId !== this.turnoActual) return false;
     if (!puedeCantar('TRUCO', this.maquina.estadoActual, true, this.rondaActual, this.envidoResuelto)) return false;
 
     this.trucoNivel = 1;
@@ -442,6 +449,10 @@ class Partida extends EventEmitter {
   // ---------------------------------------------------------
 
   irseAlMazo(jugadorId) {
+    // Irse al mazo reemplaza a tirar carta en tu turno, no es una respuesta
+    // a un canto pendiente (para eso está "No Quiero") — mismo chequeo de
+    // turno que cantarTruco/cantarEnvido.
+    if (jugadorId !== this.turnoActual) return false;
     if (!puedeCantar('IR_AL_MAZO', this.maquina.estadoActual, true, this.rondaActual, this.envidoResuelto)) {
       return false;
     }
