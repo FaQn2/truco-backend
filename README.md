@@ -99,6 +99,8 @@ backend/
 | `SUBIR_TRUCO` | — | sube Truco→Retruco→Vale Cuatro (solo quien tiene el "quiero") |
 | `RESPONDER_TRUCO` | `quiero` (bool), `subir?` (bool) | responde al Truco, opcionalmente subiendo |
 | `IRSE_AL_MAZO` | — | se va al mazo |
+| `DECLARAR_ENVIDO` | — | **solo 2v2**: declara tu puntaje real de Envido en la fase de declaración en cadena (el servidor lo calcula, no confía en ningún número del cliente); falla si no supera el mejor anunciado |
+| `SON_BUENAS` | — | **solo 2v2**: pasa tu turno de declaración sin declarar nada |
 
 ### Servidor → Cliente
 
@@ -119,7 +121,29 @@ El asiento (`seat`, índice `0..capacidad-1`) que confirma el servidor en
 usa para validar cada acción, así que nunca hace falta (ni sirve) mandar un
 id de jugador en los mensajes de juego.
 
-`PARTIDA_INICIADA` (y todo el protocolo de juego que sigue) solo se dispara
-hoy para salas en modo `1v1` (2 asientos) — es el único modo que el motor
-(`partida.js`) sabe jugar. Una sala `2v2` que completa sus 4 asientos queda
-en `estado: 'completa'` esperando un motor de juego para ese modo.
+`PARTIDA_INICIADA` (y todo el protocolo de juego que sigue) se dispara para
+salas en modo `1v1` (motor `partida.js`, sin cambios) y `2v2` (motor nuevo
+`partida_equipos.js`, 4 asientos en 2 equipos — `equipo = asiento % 2`,
+compañeros siempre enfrentados). `PARTIDA_INICIADA` lleva un campo `modo`
+para que el cliente sepa a cuál de los dos motores está entrando.
+
+### Diferencias del protocolo en modo 2v2
+
+- `MANO_REPARTIDA` lleva además `manoCompanero` (la mano del compañero —
+  nunca la del equipo rival; sección 17: hay que poder verla sí o sí).
+- `RONDA_RESUELTA`, `MANO_TERMINADA`, `PARTIDA_TERMINADA` y
+  `ENVIDO_TERMINADO` usan `ganadorEquipo` (0 o 1) en vez de `ganador`
+  (asiento) — los puntos son del equipo, no del jugador.
+- `PUNTOS_ACTUALIZADOS` lleva `puntosEquipoA`/`puntosEquipoB` en vez de
+  `puntosJ1`/`puntosJ2`.
+- Después de un `RESPONDER_ENVIDO {quiero: true}` no se resuelve directo
+  como en 1v1: arranca una fase de declaración en cadena (sección 17) — el
+  servidor manda `ENVIDO_DECLARACION_TURNO {asiento}` indicando a quién le
+  toca, ese jugador manda `DECLARAR_ENVIDO` (su puntaje real, calculado por
+  el servidor) o `SON_BUENAS`, el servidor confirma con
+  `ENVIDO_DECLARADO {asiento, valor}` (`valor: null` = son buenas) y repite
+  hasta que hablaron los 4 (o los que sigan en pie), y recién ahí llega
+  `ENVIDO_TERMINADO` con el objeto `declaraciones` completo.
+- `RESPONDER_TRUCO` lo puede mandar cualquiera de los 2 asientos del equipo
+  que debe responder (no hace falta que sea "su turno") — el primero que
+  responde cierra la decisión para los 2.

@@ -13,16 +13,21 @@
 // ============================================================
 
 const { Partida, JUGADOR1, JUGADOR2 } = require('../game-logic/partida');
+const { PartidaEquipos } = require('../game-logic/partida_equipos');
 
 // Sin 0/O/1/I/L para evitar confusión al dictar el código en voz alta.
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const PUNTOS_OBJETIVO_DEFAULT = 30;
 
-// Cantidad de asientos por modo. El motor de juego (partida.js) hoy solo
-// sabe jugar 1v1 (2 asientos) — los demás modos quedan en estado 'completa'
-// esperando a que exista un motor para esa cantidad de jugadores.
+// Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
+
+// Qué modos ya tienen motor de juego real (partida.js para 1v1,
+// partida_equipos.js para 2v2). Un modo que exista en CAPACIDAD_POR_MODO
+// pero no acá (por ejemplo un futuro 3v3) puede completarse igual, pero se
+// queda en estado 'completa' esperando su motor en vez de pasar a 'jugando'.
+const MODOS_CON_MOTOR = new Set(['1v1', '2v2']);
 
 function generarCodigo() {
   let codigo = '';
@@ -91,7 +96,7 @@ class Room {
     this.agregarViewer(ws);
 
     if (this.estaLlena()) {
-      this.estado = this.modo === '1v1' ? 'jugando' : 'completa';
+      this.estado = MODOS_CON_MOTOR.has(this.modo) ? 'jugando' : 'completa';
     }
     return { ok: true };
   }
@@ -155,11 +160,19 @@ class Room {
     };
   }
 
-  // Arranca la partida real — solo tiene sentido en modo 1v1 (2 asientos),
-  // el único que el motor de juego (partida.js) sabe jugar hoy. Conecta cada
-  // evento del motor a los sockets de la sala, filtrando la información
-  // privada (cada jugador recibe SOLO su mano).
+  // Arranca la partida real — elige el motor según la capacidad de la sala.
+  // Conecta cada evento del motor a los sockets de la sala, filtrando la
+  // información privada (cada jugador recibe SOLO su mano, y en 2v2 también
+  // la de su compañero — nunca las del equipo rival).
   iniciarPartida() {
+    if (this.capacidad === 4) {
+      this._iniciarPartidaEquipos();
+    } else {
+      this._iniciarPartida1v1();
+    }
+  }
+
+  _iniciarPartida1v1() {
     this.partida = new Partida(this.puntosObjetivo);
     const partida = this.partida;
 
@@ -212,7 +225,81 @@ class Room {
       [JUGADOR1]: this.asientos[JUGADOR1]?.nombre,
       [JUGADOR2]: this.asientos[JUGADOR2]?.nombre,
     };
-    this.broadcast({ type: 'PARTIDA_INICIADA', puntosObjetivo: this.puntosObjetivo, nombres });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
+    partida.iniciarPartida();
+  }
+
+  // Equivalente 2v2 de _iniciarPartida1v1 — mismos nombres de mensaje donde
+  // el significado es el mismo (TURNO_CAMBIADO, CARTA_JUGADA,
+  // ESTADO_CAMBIADO, CANTO_REALIZADO); donde cambia de forma lleva campos
+  // nuevos (manoCompanero, ganadorEquipo, puntosEquipoA/B) o mensajes nuevos
+  // (la fase de declaración de envido en cadena, sección 17).
+  _iniciarPartidaEquipos() {
+    this.partida = new PartidaEquipos(this.puntosObjetivo);
+    const partida = this.partida;
+    const companeroDe = (asiento) => partida.companeroDe(asiento);
+
+    partida.on('manoRepartida', (manoPorAsiento) => {
+      for (let asiento = 0; asiento < 4; asiento++) {
+        enviar(this.wsDe(asiento), {
+          type: 'MANO_REPARTIDA',
+          mano: manoPorAsiento[asiento],
+          manoCompanero: manoPorAsiento[companeroDe(asiento)],
+          repartidor: partida.repartidor,
+        });
+      }
+    });
+
+    partida.on('turnoCambiado', (turno) => {
+      this.broadcast({ type: 'TURNO_CAMBIADO', turno });
+    });
+
+    partida.on('cartaJugada', (jugador, carta) => {
+      this.broadcast({ type: 'CARTA_JUGADA', jugador, carta });
+    });
+
+    partida.on('rondaResuelta', (ganadorEquipo, parda) => {
+      this.broadcast({ type: 'RONDA_RESUELTA', ganadorEquipo, parda });
+    });
+
+    partida.on('manoTerminada', (ganadorEquipo) => {
+      this.broadcast({ type: 'MANO_TERMINADA', ganadorEquipo });
+    });
+
+    partida.on('partidaTerminada', (ganadorEquipo) => {
+      this.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo });
+    });
+
+    partida.on('puntosActualizados', (puntos) => {
+      this.broadcast({ type: 'PUNTOS_ACTUALIZADOS', puntosEquipoA: puntos[0], puntosEquipoB: puntos[1] });
+    });
+
+    partida.on('cantoRealizado', (tipo, jugador) => {
+      this.broadcast({ type: 'CANTO_REALIZADO', tipo, jugador });
+    });
+
+    partida.on('estadoCambiado', (estado) => {
+      this.broadcast({ type: 'ESTADO_CAMBIADO', estado });
+    });
+
+    // Fase de declaración de envido en cadena (sección 17) — no existe en 1v1.
+    partida.on('envidoDeclaracionTurno', (asiento) => {
+      this.broadcast({ type: 'ENVIDO_DECLARACION_TURNO', asiento });
+    });
+
+    partida.on('envidoDeclarado', (asiento, valor) => {
+      this.broadcast({ type: 'ENVIDO_DECLARADO', asiento, valor });
+    });
+
+    partida.on('envidoTerminado', ({ declaraciones, ganadorEquipo, puntosEnJuego, revelado }) => {
+      this.broadcast({ type: 'ENVIDO_TERMINADO', declaraciones, ganadorEquipo, puntosEnJuego, revelado });
+    });
+
+    const nombres = {};
+    for (let asiento = 0; asiento < 4; asiento++) {
+      nombres[asiento] = this.asientos[asiento]?.nombre;
+    }
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
     partida.iniciarPartida();
   }
 }

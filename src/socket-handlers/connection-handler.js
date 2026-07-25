@@ -17,7 +17,10 @@ function enviarError(ws, message) {
   enviar(ws, { type: 'ERROR', message });
 }
 
-// Acciones que requieren una sala ya completa (2 jugadores, partida en curso)
+// Acciones que requieren una sala ya completa (partida en curso). DECLARAR_ENVIDO
+// y SON_BUENAS son de la fase de declaración en cadena del 2v2 (sección 17) —
+// no existen en partida.js (1v1), así que ahí simplemente no van a matchear
+// ningún método y quedan como "Acción inválida".
 const ACCIONES_DE_JUEGO = new Set([
   'JUGAR_CARTA',
   'CANTAR_ENVIDO',
@@ -27,6 +30,8 @@ const ACCIONES_DE_JUEGO = new Set([
   'SUBIR_TRUCO',
   'RESPONDER_TRUCO',
   'IRSE_AL_MAZO',
+  'DECLARAR_ENVIDO',
+  'SON_BUENAS',
 ]);
 
 function manejarAccionDeJuego(roomManager, ws, mensaje) {
@@ -68,6 +73,14 @@ function manejarAccionDeJuego(roomManager, ws, mensaje) {
       break;
     case 'IRSE_AL_MAZO':
       ok = partida.irseAlMazo(jugadorId);
+      break;
+    case 'DECLARAR_ENVIDO':
+      // El puntaje declarado lo calcula el propio motor a partir de la mano
+      // real (nunca se confía en un número que mande el cliente).
+      ok = typeof partida.declararEnvido === 'function' && partida.declararEnvido(jugadorId);
+      break;
+    case 'SON_BUENAS':
+      ok = typeof partida.sonBuenas === 'function' && partida.sonBuenas(jugadorId);
       break;
     default:
       break;
