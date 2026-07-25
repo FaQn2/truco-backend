@@ -122,10 +122,25 @@ usa para validar cada acción, así que nunca hace falta (ni sirve) mandar un
 id de jugador en los mensajes de juego.
 
 `PARTIDA_INICIADA` (y todo el protocolo de juego que sigue) se dispara para
-salas en modo `1v1` (motor `partida.js`, sin cambios) y `2v2` (motor nuevo
-`partida_equipos.js`, 4 asientos en 2 equipos — `equipo = asiento % 2`,
-compañeros siempre enfrentados). `PARTIDA_INICIADA` lleva un campo `modo`
-para que el cliente sepa a cuál de los dos motores está entrando.
+salas en modo `1v1` (motor `partida.js`, sin cambios) y, si está habilitado
+(ver abajo), `2v2` (motor nuevo `partida_equipos.js`, 4 asientos en 2
+equipos — `equipo = asiento % 2`, compañeros siempre enfrentados).
+`PARTIDA_INICIADA` lleva un campo `modo` para que el cliente sepa a cuál de
+los dos motores está entrando.
+
+**2v2 todavía no arranca solo en producción.** El motor ya está probado
+(`test-client-2v2.js`), pero el cliente Godot todavía no tiene la escena 3D
+de 4 asientos — una sala 2v2 que se llena queda en `estado: 'completa'` (no
+`'jugando'`) hasta que se saque el modo de `MODOS_QUE_ARRANCAN_SOLOS` en
+`room-manager.js`. Para seguir probando el motor por consola mientras tanto:
+
+```bash
+# PowerShell
+$env:HABILITAR_2V2 = '1'; node server.js
+
+# bash
+HABILITAR_2V2=1 node server.js
+```
 
 ### Diferencias del protocolo en modo 2v2
 

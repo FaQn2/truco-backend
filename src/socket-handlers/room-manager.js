@@ -23,11 +23,18 @@ const PUNTOS_OBJETIVO_DEFAULT = 30;
 // Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
 
-// Qué modos ya tienen motor de juego real (partida.js para 1v1,
-// partida_equipos.js para 2v2). Un modo que exista en CAPACIDAD_POR_MODO
-// pero no acá (por ejemplo un futuro 3v3) puede completarse igual, pero se
-// queda en estado 'completa' esperando su motor en vez de pasar a 'jugando'.
-const MODOS_CON_MOTOR = new Set(['1v1', '2v2']);
+// Modos que arrancan la partida SOLOS al llenarse la mesa (pasan a estado
+// 'jugando' e iniciarPartida() se dispara enseguida). El motor de 2v2
+// (partida_equipos.js) ya existe y está probado con test-client-2v2.js,
+// pero el cliente Godot todavía no tiene la escena 3D de 4 asientos —
+// arrancarla en producción mandaría PARTIDA_INICIADA a jugadores que caen
+// en una pantalla que no sabe renderizar un 2v2. HABILITAR_2V2=1 lo
+// prende igual (para poder seguir corriendo test-client-2v2.js en local
+// contra el protocolo real) — Railway no define esa variable, así que en
+// producción 2v2 queda en 'completa' hasta sacarlo de acá.
+const MODOS_QUE_ARRANCAN_SOLOS = new Set(
+  process.env.HABILITAR_2V2 === '1' ? ['1v1', '2v2'] : ['1v1']
+);
 
 function generarCodigo() {
   let codigo = '';
@@ -96,7 +103,7 @@ class Room {
     this.agregarViewer(ws);
 
     if (this.estaLlena()) {
-      this.estado = MODOS_CON_MOTOR.has(this.modo) ? 'jugando' : 'completa';
+      this.estado = MODOS_QUE_ARRANCAN_SOLOS.has(this.modo) ? 'jugando' : 'completa';
     }
     return { ok: true };
   }
