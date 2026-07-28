@@ -101,6 +101,7 @@ backend/
 | `IRSE_AL_MAZO` | — | se va al mazo |
 | `DECLARAR_ENVIDO` | — | **solo 2v2**: declara tu puntaje real de Envido en la fase de declaración en cadena (el servidor lo calcula, no confía en ningún número del cliente); falla si no supera el mejor anunciado |
 | `SON_BUENAS` | — | **solo 2v2**: pasa tu turno de declaración sin declarar nada |
+| `MIRAR` | `yaw`, `pitch` (grados, clamp server-side a ±90) | cosmético — hacia dónde gira la cabeza del propio modelo 3D; se reenvía tal cual al resto de la sala como `MIRAR {asiento, yaw, pitch}`, sin pasar por Partida/PartidaEquipos (no requiere partida en curso ni valida turno) |
 
 ### Servidor → Cliente
 
@@ -114,7 +115,9 @@ snapshot genérico de `DETALLE_SALA`), `PARTIDA_INICIADA`, `MANO_REPARTIDA`
 (solo tu propia mano), `TURNO_CAMBIADO`, `CARTA_JUGADA`, `RONDA_RESUELTA`,
 `MANO_TERMINADA`, `PARTIDA_TERMINADA`, `PUNTOS_ACTUALIZADOS`,
 `CANTO_REALIZADO`, `ESTADO_CAMBIADO`, `ENVIDO_TERMINADO` (revela puntajes,
-nunca las cartas del rival), `ERROR`.
+nunca las cartas del rival), `MIRAR` (`asiento`, `yaw`, `pitch` — eco del
+`MIRAR` de cualquier sentado, incluido el propio; el cliente ignora los que
+tienen su propio asiento), `ERROR`.
 
 El asiento (`seat`, índice `0..capacidad-1`) que confirma el servidor en
 `ASIENTO_CONFIRMADO` es tu identidad para toda la partida — el servidor lo

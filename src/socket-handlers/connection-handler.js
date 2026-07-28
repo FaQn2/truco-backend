@@ -135,6 +135,13 @@ function manejarMensaje(roomManager, ws, data) {
       roomManager.salirSala(ws);
       return;
 
+    // Cosmético (gira la cabeza del modelo 3D hacia donde mira cada
+    // jugador) — no es una acción de juego: no pasa por manejarAccionDeJuego
+    // ni requiere partida en curso, así que se resuelve acá directo.
+    case 'MIRAR':
+      roomManager.mirar(ws, mensaje.yaw, mensaje.pitch);
+      return;
+
     default:
       if (ACCIONES_DE_JUEGO.has(mensaje.type)) {
         manejarAccionDeJuego(roomManager, ws, mensaje);

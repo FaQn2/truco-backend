@@ -392,6 +392,20 @@ class RoomManager {
     return this.rooms.get(ws.roomCode) || null;
   }
 
+  // Reenvía hacia dónde gira la cabeza de ws al resto de la sala (1v1 y
+  // 2v2). Es puramente cosmético — no pasa por Partida/PartidaEquipos ni
+  // valida turno, así que puede mandarse en cualquier momento (incluso en
+  // el lobby, aunque ahí no hay nadie del otro lado escuchando todavía). El
+  // asiento SIEMPRE es ws.seat (nunca lo que mande el cliente), mismo
+  // criterio que el resto de las acciones — ver manejarAccionDeJuego.
+  mirar(ws, yaw, pitch) {
+    const room = this.salaDe(ws);
+    if (!room || ws.seat === undefined || ws.seat < 0) return;
+    const yawSeguro = Math.max(-90, Math.min(90, Number(yaw) || 0));
+    const pitchSeguro = Math.max(-90, Math.min(90, Number(pitch) || 0));
+    room.broadcast({ type: 'MIRAR', asiento: ws.seat, yaw: yawSeguro, pitch: pitchSeguro });
+  }
+
   // Saca a ws de la sala que esté viendo/ocupando (si hay alguna). La usan
   // tanto el botón "Volver" (SALIR_SALA) como una desconexión real, y
   // también se llama antes de entrar a OTRA sala para no quedar "viendo" dos
