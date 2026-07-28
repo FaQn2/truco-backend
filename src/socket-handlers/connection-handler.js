@@ -142,6 +142,12 @@ function manejarMensaje(roomManager, ws, data) {
       roomManager.mirar(ws, mensaje.yaw, mensaje.pitch);
       return;
 
+    // Chat en vivo entre los jugadores sentados en la sala — mismo patrón
+    // que MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
+    case 'CHAT_MENSAJE':
+      roomManager.chat(ws, mensaje.texto);
+      return;
+
     default:
       if (ACCIONES_DE_JUEGO.has(mensaje.type)) {
         manejarAccionDeJuego(roomManager, ws, mensaje);

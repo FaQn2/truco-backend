@@ -19,6 +19,7 @@ const { PartidaEquipos } = require('../game-logic/partida_equipos');
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const PUNTOS_OBJETIVO_DEFAULT = 30;
+const CHAT_LARGO_MAXIMO = 200;
 
 // Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
@@ -404,6 +405,20 @@ class RoomManager {
     const yawSeguro = Math.max(-90, Math.min(90, Number(yaw) || 0));
     const pitchSeguro = Math.max(-90, Math.min(90, Number(pitch) || 0));
     room.broadcast({ type: 'MIRAR', asiento: ws.seat, yaw: yawSeguro, pitch: pitchSeguro });
+  }
+
+  // Chat en vivo — mismo criterio que mirar(): puro relay entre los sentados
+  // de la sala, no pasa por Partida/PartidaEquipos ni valida turno. El
+  // asiento y el nombre SIEMPRE salen del propio servidor (room.asientos),
+  // nunca de lo que mande el cliente, para que nadie pueda hablar
+  // haciéndose pasar por otro jugador.
+  chat(ws, texto) {
+    const room = this.salaDe(ws);
+    if (!room || ws.seat === undefined || ws.seat < 0) return;
+    const limpio = String(texto || '').trim().slice(0, CHAT_LARGO_MAXIMO);
+    if (!limpio) return;
+    const nombre = room.asientos[ws.seat]?.nombre || `Jugador${ws.seat + 1}`;
+    room.broadcast({ type: 'CHAT_MENSAJE', asiento: ws.seat, nombre, texto: limpio });
   }
 
   // Saca a ws de la sala que esté viendo/ocupando (si hay alguna). La usan
