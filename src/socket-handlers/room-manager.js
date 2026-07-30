@@ -13,7 +13,7 @@
 // ============================================================
 
 const { Partida, JUGADOR1, JUGADOR2 } = require('../game-logic/partida');
-const { PartidaEquipos } = require('../game-logic/partida_equipos');
+const { PartidaEquipos, equipoDe } = require('../game-logic/partida_equipos');
 
 // Sin 0/O/1/I/L para evitar confusión al dictar el código en voz alta.
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -431,12 +431,18 @@ class RoomManager {
     ws.seat = -1;
     if (!room) return;
 
-    const estabaJugando = room.estado === 'jugando' && room.asientoDe(ws) !== -1;
+    // room.asientoDe(ws) hay que leerlo ANTES de jugadorDesconectado (que
+    // limpia el asiento) — es lo único que nos dice quién se fue y, con eso,
+    // quién ganó por abandono.
+    const seatIndex = room.asientoDe(ws);
+    const estabaJugando = room.estado === 'jugando' && seatIndex !== -1;
     room.jugadorDesconectado(ws);
 
     if (estabaJugando) {
       // Sin reconexión en esta etapa: si se fue alguien de una partida ya
-      // arrancada, la sala deja de servir para nada.
+      // arrancada, no tiene sentido seguir — se termina ahí mismo y gana
+      // el/los que quedaron.
+      this._declararGanadorPorAbandono(room, seatIndex);
       this.rooms.delete(room.code);
       return;
     }
@@ -444,6 +450,22 @@ class RoomManager {
     room.broadcastLobby({ type: 'DETALLE_SALA', ...room.snapshot() });
     if (room.viewers.size === 0) {
       this.rooms.delete(room.code);
+    }
+  }
+
+  // PARTIDA_TERMINADA con el mismo shape que el final normal de una partida
+  // (ver Room._iniciarPartida1v1 / _iniciarPartidaEquipos: "ganador" en 1v1,
+  // "ganadorEquipo" en 2v2) más "abandono: true", para que el cliente pueda
+  // mostrar "el rival abandonó" en vez de un cierre de mano común. Solo llega
+  // a los asientos que quedan: jugadorDesconectado ya vació el del que se
+  // fue, y Room.broadcast solo manda a asientos ocupados.
+  _declararGanadorPorAbandono(room, seatIndexQueSeFue) {
+    if (room.capacidad === 4) {
+      const ganadorEquipo = 1 - equipoDe(seatIndexQueSeFue);
+      room.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo, abandono: true });
+    } else {
+      const ganador = seatIndexQueSeFue === JUGADOR1 ? JUGADOR2 : JUGADOR1;
+      room.broadcast({ type: 'PARTIDA_TERMINADA', ganador, abandono: true });
     }
   }
 
