@@ -59,11 +59,13 @@ class PartidaEquipos extends EventEmitter {
     this._trucoInterrumpidoPorEnvido = false;
 
     // Fase de declaración de envido (después de "Quiero") — sección 17: el
-    // Mano declara primero su puntaje real, y cada jugador siguiente (en
-    // orden de mesa) declara un número más alto o dice "Son buenas".
+    // Mano declara primero su puntaje real; a partir de ahí habla siempre
+    // el EQUIPO QUE VA PERDIENDO, con su próximo jugador sin hablar todavía
+    // (en orden de mesa arrancando en Mano). El equipo que va ganando se
+    // queda callado — no "pasa su turno", directamente no le toca.
     this._declarandoEnvido = false;
-    this._ordenDeclaracion = []; // asientos activos, en orden, arrancando en Mano
-    this._indiceDeclaracion = 0;
+    this._colaEquipo = { 0: [], 1: [] }; // asientos de cada equipo que todavía no hablaron, en orden de mesa
+    this._turnoDeclaracionActual = -1;
     this._mejorDeclarado = -1;
     this._equipoMejorDeclarado = -1;
     this._declaraciones = {}; // asiento -> número declarado | null (son buenas)
@@ -125,8 +127,8 @@ class PartidaEquipos extends EventEmitter {
     this._cadenaEnvido = [];
     this._trucoInterrumpidoPorEnvido = false;
     this._declarandoEnvido = false;
-    this._ordenDeclaracion = [];
-    this._indiceDeclaracion = 0;
+    this._colaEquipo = { 0: [], 1: [] };
+    this._turnoDeclaracionActual = -1;
     this._mejorDeclarado = -1;
     this._equipoMejorDeclarado = -1;
     this._declaraciones = {};
@@ -351,8 +353,10 @@ class PartidaEquipos extends EventEmitter {
     return true;
   }
 
-  // Arranca la fase de declaración (sección 17): orden de mesa desde el
-  // Mano, saltando a quien ya se fue al mazo.
+  // Arranca la fase de declaración (sección 17): el Mano abre, en orden de
+  // mesa saltando a quien ya se fue al mazo. De ahí en más el turno NO es
+  // un recorrido fijo de asientos — habla siempre el equipo que va
+  // perdiendo (ver _registrarDeclaracion).
   _iniciarDeclaracionEnvido() {
     this._declarandoEnvido = true;
     this._mejorDeclarado = -1;
@@ -360,21 +364,17 @@ class PartidaEquipos extends EventEmitter {
     this._declaraciones = {};
 
     const mano = (this.repartidor + 1) % NUM_ASIENTOS;
-    this._ordenDeclaracion = [];
+    this._colaEquipo = { 0: [], 1: [] };
     for (let i = 0; i < NUM_ASIENTOS; i++) {
       const asiento = (mano + i) % NUM_ASIENTOS;
-      if (!this._idosAlMazo.has(asiento)) this._ordenDeclaracion.push(asiento);
+      if (!this._idosAlMazo.has(asiento)) this._colaEquipo[equipoDe(asiento)].push(asiento);
     }
-    this._indiceDeclaracion = 0;
-    this.emit('envidoDeclaracionTurno', this._ordenDeclaracion[0]);
+    this._turnoDeclaracionActual = this._colaEquipo[equipoDe(mano)].shift();
+    this.emit('envidoDeclaracionTurno', this._turnoDeclaracionActual);
   }
 
   _puedeDeclarar(asiento) {
-    return (
-      this._declarandoEnvido &&
-      this._indiceDeclaracion < this._ordenDeclaracion.length &&
-      this._ordenDeclaracion[this._indiceDeclaracion] === asiento
-    );
+    return this._declarandoEnvido && this._turnoDeclaracionActual === asiento;
   }
 
   // El valor declarado SIEMPRE es el puntaje real del jugador (el servidor
@@ -393,11 +393,16 @@ class PartidaEquipos extends EventEmitter {
   // declarar un número real — no hay nada previo con qué compararse.
   sonBuenas(asiento) {
     if (!this._puedeDeclarar(asiento)) return false;
-    if (this._indiceDeclaracion === 0) return false;
+    if (this._mejorDeclarado === -1) return false;
     this._registrarDeclaracion(asiento, null);
     return true;
   }
 
+  // El equipo que va ganando espera: no habla de nuevo hasta que el rival
+  // lo supere. Por eso el próximo en hablar siempre sale de la cola del
+  // equipo que va PERDIENDO (nunca de la cola del propio equipo líder) —
+  // si a ese equipo no le queda nadie sin hablar, ya no puede superar al
+  // líder y la declaración termina ahí, sin preguntarle nada a nadie más.
   _registrarDeclaracion(asiento, valor) {
     this._declaraciones[asiento] = valor;
     if (valor !== null && valor > this._mejorDeclarado) {
@@ -405,13 +410,14 @@ class PartidaEquipos extends EventEmitter {
       this._equipoMejorDeclarado = equipoDe(asiento);
     }
     this.emit('envidoDeclarado', asiento, valor);
-    this._indiceDeclaracion += 1;
 
-    if (this._indiceDeclaracion >= this._ordenDeclaracion.length) {
+    const equipoQuePierde = this._equipoMejorDeclarado === 0 ? 1 : 0;
+    if (this._colaEquipo[equipoQuePierde].length === 0) {
       this._resolverDeclaracionEnvido();
       return;
     }
-    this.emit('envidoDeclaracionTurno', this._ordenDeclaracion[this._indiceDeclaracion]);
+    this._turnoDeclaracionActual = this._colaEquipo[equipoQuePierde].shift();
+    this.emit('envidoDeclaracionTurno', this._turnoDeclaracionActual);
   }
 
   _resolverDeclaracionEnvido() {
@@ -443,8 +449,8 @@ class PartidaEquipos extends EventEmitter {
     this._cantoEnvidoPendiente = '';
     this._quienCantoEnvido = -1;
     this._cadenaEnvido = [];
-    this._ordenDeclaracion = [];
-    this._indiceDeclaracion = 0;
+    this._colaEquipo = { 0: [], 1: [] };
+    this._turnoDeclaracionActual = -1;
 
     if (this.puntos[0] >= this.puntosObjetivo || this.puntos[1] >= this.puntosObjetivo) {
       this._trucoInterrumpidoPorEnvido = false;
