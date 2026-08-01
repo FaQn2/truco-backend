@@ -11,6 +11,21 @@ const { manejarConexion } = require('./src/socket-handlers/connection-handler');
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+// Última red de seguridad: cubre lo que corre FUERA de un handler de mensaje
+// (p.ej. los setTimeout de fin de mano en partida.js / partida_equipos.js),
+// que el try/catch de connection-handler.js no puede atajar porque no están
+// en esa misma pila de llamadas. Sin esto, cualquier excepción no atrapada
+// mata el proceso de Node y con él TODAS las salas activas de TODOS los
+// jugadores (ver DEBUG-RAILWAY.md) — se loguea con el stack completo para
+// poder reproducir el bug y se sigue corriendo en vez de caerse.
+process.on('uncaughtException', (err) => {
+  console.error('[server] uncaughtException — el proceso sigue vivo, ninguna sala se cerró:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandledRejection — el proceso sigue vivo, ninguna sala se cerró:', reason);
+});
+
 const roomManager = new RoomManager();
 const wss = new WebSocketServer({ port: PORT });
 

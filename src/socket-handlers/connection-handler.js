@@ -91,20 +91,13 @@ function manejarAccionDeJuego(roomManager, ws, mensaje) {
   }
 }
 
-function manejarMensaje(roomManager, ws, data) {
-  let mensaje;
-  try {
-    mensaje = JSON.parse(data);
-  } catch (err) {
-    enviarError(ws, 'Mensaje no es JSON válido.');
-    return;
-  }
-
-  if (!mensaje || typeof mensaje.type !== 'string') {
-    enviarError(ws, 'Falta el campo "type" en el mensaje.');
-    return;
-  }
-
+// Todo lo que puede tirar una excepción (lógica de salas y de las dos
+// partidas, 1v1 y 2v2 — ambas pasan por acá) queda adentro de este try. Sin
+// esto, un bug en un solo mensaje de un solo jugador tira abajo el proceso
+// entero de Node, y con él TODAS las salas en curso de TODOS los jugadores
+// conectados en ese momento (ver DEBUG-RAILWAY.md). Con el try/catch, ese
+// jugador recibe un ERROR y el resto de las partidas ni se entera.
+function _despacharMensaje(roomManager, ws, mensaje) {
   switch (mensaje.type) {
     case 'CREAR_SALA':
       roomManager.crearSala(ws, {
@@ -157,10 +150,44 @@ function manejarMensaje(roomManager, ws, data) {
   }
 }
 
+function manejarMensaje(roomManager, ws, data) {
+  let mensaje;
+  try {
+    mensaje = JSON.parse(data);
+  } catch (err) {
+    enviarError(ws, 'Mensaje no es JSON válido.');
+    return;
+  }
+
+  if (!mensaje || typeof mensaje.type !== 'string') {
+    enviarError(ws, 'Falta el campo "type" en el mensaje.');
+    return;
+  }
+
+  try {
+    _despacharMensaje(roomManager, ws, mensaje);
+  } catch (err) {
+    console.error(`[connection-handler] Error procesando "${mensaje.type}" (asiento=${ws.seat ?? '?'}):`, err);
+    enviarError(ws, 'Ocurrió un error procesando esa acción. Probá de nuevo.');
+  }
+}
+
 function manejarConexion(roomManager, ws) {
   ws.on('message', (data) => manejarMensaje(roomManager, ws, data));
-  ws.on('close', () => roomManager.desconectar(ws));
-  ws.on('error', () => roomManager.desconectar(ws));
+  ws.on('close', () => {
+    try {
+      roomManager.desconectar(ws);
+    } catch (err) {
+      console.error('[connection-handler] Error al desconectar:', err);
+    }
+  });
+  ws.on('error', () => {
+    try {
+      roomManager.desconectar(ws);
+    } catch (err) {
+      console.error('[connection-handler] Error al desconectar:', err);
+    }
+  });
 }
 
 module.exports = { manejarConexion };
