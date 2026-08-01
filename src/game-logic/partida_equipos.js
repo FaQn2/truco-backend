@@ -309,6 +309,7 @@ class PartidaEquipos extends EventEmitter {
   }
 
   escalarEnvido(asiento, tipo) {
+    if (this._idosAlMazo.has(asiento)) return false;
     if (this.maquina.estadoActual !== Estado.RESOLVIENDO_ENVIDO) return false;
     // Solo puede subir el EQUIPO contrario al que hizo el último canto
     // (sección 6: "una vez que alguien del equipo contrario respondió, solo
@@ -326,7 +327,10 @@ class PartidaEquipos extends EventEmitter {
 
   responderEnvido(asiento, quiero) {
     // Cualquier jugador del equipo contrario al que cantó puede responder
-    // (sección 6: "no solo el que tiene el turno").
+    // (sección 6: "no solo el que tiene el turno") — pero no si ese jugador
+    // puntual ya se fue al mazo (sección 10: quien se va al mazo deja de
+    // poder cantar o responder nada por su equipo).
+    if (this._idosAlMazo.has(asiento)) return false;
     if (equipoDe(asiento) === equipoDe(this._quienCantoEnvido)) return false;
     const accion = quiero ? 'QUIERO' : 'NO_QUIERO';
     if (!puedeCantar(accion, this.maquina.estadoActual, false, this.rondaActual, this.envidoResuelto)) return false;
@@ -515,6 +519,10 @@ class PartidaEquipos extends EventEmitter {
   // (sección 17). Como el chequeo es por EQUIPO (no por asiento exacto como
   // en partida.js), alcanza con comparar equipoDe(asiento) acá.
   responderTruco(asiento, quiero, subir = false) {
+    // Mismo criterio que responderEnvido: el equipo puede tener el turno de
+    // respuesta, pero si este jugador puntual ya se fue al mazo no puede
+    // ejercerlo (el compañero activo sí puede).
+    if (this._idosAlMazo.has(asiento)) return false;
     if (equipoDe(asiento) !== this._equipoDebeResponderTruco) return false;
     const accion = quiero ? 'QUIERO' : 'NO_QUIERO';
     if (!puedeCantar(accion, this.maquina.estadoActual, false, this.rondaActual, this.envidoResuelto)) return false;
