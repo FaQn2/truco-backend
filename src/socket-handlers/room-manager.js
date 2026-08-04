@@ -455,17 +455,18 @@ class RoomManager {
 
   // PARTIDA_TERMINADA con el mismo shape que el final normal de una partida
   // (ver Room._iniciarPartida1v1 / _iniciarPartidaEquipos: "ganador" en 1v1,
-  // "ganadorEquipo" en 2v2) más "abandono: true", para que el cliente pueda
-  // mostrar "el rival abandonó" en vez de un cierre de mano común. Solo llega
-  // a los asientos que quedan: jugadorDesconectado ya vació el del que se
-  // fue, y Room.broadcast solo manda a asientos ocupados.
+  // "ganadorEquipo" en 2v2) más "abandono: true" y "asientoAbandono" (el
+  // asiento que se fue), para que el cliente pueda mostrar "el rival
+  // abandonó" y hacer desaparecer su personaje de la mesa en vez de un cierre
+  // de mano común. Solo llega a los asientos que quedan: jugadorDesconectado
+  // ya vació el del que se fue, y Room.broadcast solo manda a asientos ocupados.
   _declararGanadorPorAbandono(room, seatIndexQueSeFue) {
     if (room.capacidad === 4) {
       const ganadorEquipo = 1 - equipoDe(seatIndexQueSeFue);
-      room.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo, abandono: true });
+      room.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo, abandono: true, asientoAbandono: seatIndexQueSeFue });
     } else {
       const ganador = seatIndexQueSeFue === JUGADOR1 ? JUGADOR2 : JUGADOR1;
-      room.broadcast({ type: 'PARTIDA_TERMINADA', ganador, abandono: true });
+      room.broadcast({ type: 'PARTIDA_TERMINADA', ganador, abandono: true, asientoAbandono: seatIndexQueSeFue });
     }
   }
 
