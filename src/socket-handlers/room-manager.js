@@ -24,6 +24,13 @@ const CHAT_LARGO_MAXIMO = 200;
 // Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
 
+// Personajes jugables disponibles hoy — debe reflejar PersonajesData.LISTA
+// en el cliente Godot (scripts/utils/personajes_data.gd). Nunca se confía a
+// ciegas en lo que mande el socket: si manda algo fuera de esta lista (o
+// nada), se usa PERSONAJE_DEFAULT.
+const PERSONAJES_VALIDOS = new Set(['horacio', 'gideon']);
+const PERSONAJE_DEFAULT = 'horacio';
+
 // Modos que arrancan la partida SOLOS al llenarse la mesa (pasan a estado
 // 'jugando' e iniciarPartida() se dispara enseguida). El motor de 2v2
 // (partida_equipos.js) ya existe y está probado con test-client-2v2.js,
@@ -94,7 +101,7 @@ class Room {
     ws.roomCode = this.code;
   }
 
-  elegirAsiento(ws, index, nombre) {
+  elegirAsiento(ws, index, nombre, personajeId) {
     if (this.estado !== 'esperando') {
       return { ok: false, error: 'La sala ya no admite más jugadores.' };
     }
@@ -109,7 +116,8 @@ class Room {
     const anterior = this.asientoDe(ws);
     if (anterior !== -1) this.asientos[anterior] = null;
 
-    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}` };
+    const personaje = PERSONAJES_VALIDOS.has(personajeId) ? personajeId : PERSONAJE_DEFAULT;
+    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}`, personaje };
     ws.seat = index;
     this.agregarViewer(ws);
 
@@ -164,6 +172,7 @@ class Room {
         index,
         ocupado: !!slot,
         nombre: slot ? slot.nombre : null,
+        personaje: slot ? slot.personaje : null,
       })),
     };
   }
@@ -244,7 +253,11 @@ class Room {
       [JUGADOR1]: this.asientos[JUGADOR1]?.nombre,
       [JUGADOR2]: this.asientos[JUGADOR2]?.nombre,
     };
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
+    const personajes = {
+      [JUGADOR1]: this.asientos[JUGADOR1]?.personaje,
+      [JUGADOR2]: this.asientos[JUGADOR2]?.personaje,
+    };
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, personajes });
     partida.iniciarPartida();
   }
 
@@ -316,10 +329,12 @@ class Room {
     });
 
     const nombres = {};
+    const personajes = {};
     for (let asiento = 0; asiento < 4; asiento++) {
       nombres[asiento] = this.asientos[asiento]?.nombre;
+      personajes[asiento] = this.asientos[asiento]?.personaje;
     }
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, personajes });
     partida.iniciarPartida();
   }
 }
@@ -329,7 +344,7 @@ class RoomManager {
     this.rooms = new Map();
   }
 
-  crearSala(ws, { nombreSala, modo, nombreJugador, puntosObjetivo }) {
+  crearSala(ws, { nombreSala, modo, nombreJugador, puntosObjetivo, personajeId }) {
     if (!CAPACIDAD_POR_MODO[modo]) {
       enviar(ws, { type: 'ERROR', message: `Modo de sala desconocido: ${modo}` });
       return null;
@@ -343,7 +358,7 @@ class RoomManager {
 
     const room = new Room(code, { nombreSala, modo, puntosObjetivo });
     this.rooms.set(code, room);
-    room.elegirAsiento(ws, 0, nombreJugador);
+    room.elegirAsiento(ws, 0, nombreJugador, personajeId);
     enviar(ws, { type: 'SALA_CREADA', code, seat: 0 });
     enviar(ws, { type: 'DETALLE_SALA', ...room.snapshot() });
     return room;
@@ -372,7 +387,7 @@ class RoomManager {
     return room;
   }
 
-  elegirAsiento(ws, code, index, nombreJugador) {
+  elegirAsiento(ws, code, index, nombreJugador, personajeId) {
     const room = this.rooms.get((code || '').toUpperCase());
     if (!room) {
       enviar(ws, { type: 'ERROR', message: 'La sala no existe.' });
@@ -380,7 +395,7 @@ class RoomManager {
     }
     if (ws.roomCode && ws.roomCode !== room.code) this.salirSala(ws);
 
-    const resultado = room.elegirAsiento(ws, index, nombreJugador);
+    const resultado = room.elegirAsiento(ws, index, nombreJugador, personajeId);
     if (!resultado.ok) {
       enviar(ws, { type: 'ERROR', message: resultado.error });
       return;

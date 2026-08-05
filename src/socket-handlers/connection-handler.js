@@ -105,6 +105,7 @@ function _despacharMensaje(roomManager, ws, mensaje) {
         modo: mensaje.modo,
         nombreJugador: mensaje.nombre,
         puntosObjetivo: mensaje.puntosObjetivo,
+        personajeId: mensaje.personaje,
       });
       return;
 
@@ -117,7 +118,7 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       return;
 
     case 'ELEGIR_ASIENTO':
-      roomManager.elegirAsiento(ws, mensaje.code, mensaje.asiento, mensaje.nombre);
+      roomManager.elegirAsiento(ws, mensaje.code, mensaje.asiento, mensaje.nombre, mensaje.personaje);
       return;
 
     case 'DEJAR_ASIENTO':
