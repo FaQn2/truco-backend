@@ -610,8 +610,11 @@ class PartidaEquipos extends EventEmitter {
   // Puntos / fin de mano / fin de partida
   // ---------------------------------------------------------
 
+  // Mismo criterio que partida.js (1v1): topeado acá porque una sola suma
+  // (Falta Envido, Vale Cuatro) puede pasarse del objetivo — sin el tope, un
+  // final a 30 podía terminar mostrando 32.
   _sumarPuntos(equipoGanador, puntos) {
-    this.puntos[equipoGanador] += puntos;
+    this.puntos[equipoGanador] = Math.min(this.puntos[equipoGanador] + puntos, this.puntosObjetivo);
     this.emit('puntosActualizados', { ...this.puntos });
   }
 

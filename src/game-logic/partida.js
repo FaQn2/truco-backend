@@ -479,8 +479,12 @@ class Partida extends EventEmitter {
   // Puntos / fin de mano / fin de partida
   // ---------------------------------------------------------
 
+  // Ojo: se topea acá en vez de en _finDeMano, porque puntos ya puede pasarse
+  // del objetivo en una sola suma (ej. Falta Envido, o Vale Cuatro con la
+  // mano ya cerca de los puntosObjetivo) — sin el tope, un final normal a 30
+  // podía terminar mostrando 32.
   _sumarPuntos(ganador, puntos) {
-    this.puntos[ganador] += puntos;
+    this.puntos[ganador] = Math.min(this.puntos[ganador] + puntos, this.puntosObjetivo);
     this.emit('puntosActualizados', { ...this.puntos });
   }
 
