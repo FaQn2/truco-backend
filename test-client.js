@@ -53,13 +53,6 @@ class ClienteDePrueba {
         this._log(
           `Detalle de sala ${msg.code}: ${msg.asientos.map((a) => (a.ocupado ? a.nombre : 'libre')).join(' | ')}`
         );
-        // Ya no arranca sola al llenarse — el host manda INICIAR_PARTIDA (ver
-        // room-manager.js Room.intentarIniciar). Acá simulamos que el host
-        // aprieta el botón apenas ve la mesa 'completa'.
-        if (msg.estado === 'completa' && msg.hostSeat === this.seat) {
-          this._log('Mesa completa, mando INICIAR_PARTIDA (soy el host)');
-          this.enviar({ type: 'INICIAR_PARTIDA', code: msg.code });
-        }
         break;
 
       case 'ASIENTO_CONFIRMADO':

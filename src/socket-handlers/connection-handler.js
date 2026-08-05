@@ -105,7 +105,6 @@ function _despacharMensaje(roomManager, ws, mensaje) {
         modo: mensaje.modo,
         nombreJugador: mensaje.nombre,
         puntosObjetivo: mensaje.puntosObjetivo,
-        personajeId: mensaje.personaje,
       });
       return;
 
@@ -118,19 +117,7 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       return;
 
     case 'ELEGIR_ASIENTO':
-      roomManager.elegirAsiento(ws, mensaje.code, mensaje.asiento, mensaje.nombre, mensaje.personaje);
-      return;
-
-    // Cambiar el personaje elegido sin cambiar de asiento (selector dentro
-    // del lobby, ver scenes/lobby.tscn).
-    case 'ELEGIR_PERSONAJE':
-      roomManager.elegirPersonaje(ws, mensaje.code, mensaje.personaje);
-      return;
-
-    // Solo el host puede mandar esto (ver Room.intentarIniciar) — arranca
-    // la partida una vez la mesa está completa.
-    case 'INICIAR_PARTIDA':
-      roomManager.iniciarPartidaSolicitada(ws, mensaje.code);
+      roomManager.elegirAsiento(ws, mensaje.code, mensaje.asiento, mensaje.nombre);
       return;
 
     case 'DEJAR_ASIENTO':

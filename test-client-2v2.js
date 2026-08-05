@@ -307,12 +307,6 @@ async function main() {
     await new Promise((r) => setTimeout(r, 150));
   }
 
-  // Ya no arranca sola al llenarse — el host (A, asiento 0 por ser quien
-  // creó la sala) tiene que mandar INICIAR_PARTIDA (ver room-manager.js
-  // Room.intentarIniciar).
-  A._log('Mesa completa, mando INICIAR_PARTIDA (soy el host)');
-  A.enviar({ type: 'INICIAR_PARTIDA', code });
-
   try {
     await Promise.race([manoTerminada, timeout]);
     console.log('\n✅ Test 2v2 OK: mano completa (envido en cadena + truco respondido por el compañero) de punta a punta.');

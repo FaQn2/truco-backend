@@ -24,21 +24,16 @@ const CHAT_LARGO_MAXIMO = 200;
 // Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
 
-// Personajes jugables disponibles hoy — debe reflejar PersonajesData.LISTA
-// en el cliente Godot (scripts/utils/personajes_data.gd). Nunca se confía a
-// ciegas en lo que mande el socket: si manda algo fuera de esta lista (o
-// nada), se usa PERSONAJE_DEFAULT.
-const PERSONAJES_VALIDOS = new Set(['horacio', 'gideon']);
-const PERSONAJE_DEFAULT = 'horacio';
-
-// Modos que el HOST puede efectivamente iniciar con INICIAR_PARTIDA una vez
-// la mesa está completa. El motor de 2v2 (partida_equipos.js) ya existe y
-// está probado con test-client-2v2.js, pero mandarlo en producción todavía
-// no está confirmado para todos los clientes — HABILITAR_2V2=1 lo prende
-// igual (para poder seguir corriendo test-client-2v2.js en local contra el
-// protocolo real). Railway no define esa variable, así que en producción un
-// host de 2v2 que aprieta "Iniciar Partida" recibe ERROR hasta sacarlo de acá.
-const MODOS_HABILITADOS = new Set(
+// Modos que arrancan la partida SOLOS al llenarse la mesa (pasan a estado
+// 'jugando' e iniciarPartida() se dispara enseguida). El motor de 2v2
+// (partida_equipos.js) ya existe y está probado con test-client-2v2.js,
+// pero el cliente Godot todavía no tiene la escena 3D de 4 asientos —
+// arrancarla en producción mandaría PARTIDA_INICIADA a jugadores que caen
+// en una pantalla que no sabe renderizar un 2v2. HABILITAR_2V2=1 lo
+// prende igual (para poder seguir corriendo test-client-2v2.js en local
+// contra el protocolo real) — Railway no define esa variable, así que en
+// producción 2v2 queda en 'completa' hasta sacarlo de acá.
+const MODOS_QUE_ARRANCAN_SOLOS = new Set(
   process.env.HABILITAR_2V2 === '1' ? ['1v1', '2v2'] : ['1v1']
 );
 
@@ -80,10 +75,6 @@ class Room {
     // perdido, porque _declararGanadorPorAbandono invierte el resultado en
     // base a quién se fue).
     this.partidaTerminada = false;
-    // El socket que creó la sala — solo él puede mandar INICIAR_PARTIDA (ver
-    // intentarIniciar). Se reasigna a otro sentado si el host se va antes de
-    // arrancar (jugadorDesconectado), para que la sala no quede huérfana.
-    this.hostWs = null;
   }
 
   ocupados() {
@@ -98,16 +89,12 @@ class Room {
     return this.asientos.findIndex((a) => a && a.ws === ws);
   }
 
-  esHost(ws) {
-    return this.hostWs === ws;
-  }
-
   agregarViewer(ws) {
     this.viewers.add(ws);
     ws.roomCode = this.code;
   }
 
-  elegirAsiento(ws, index, nombre, personajeId) {
+  elegirAsiento(ws, index, nombre) {
     if (this.estado !== 'esperando') {
       return { ok: false, error: 'La sala ya no admite más jugadores.' };
     }
@@ -122,17 +109,12 @@ class Room {
     const anterior = this.asientoDe(ws);
     if (anterior !== -1) this.asientos[anterior] = null;
 
-    const personaje = PERSONAJES_VALIDOS.has(personajeId) ? personajeId : PERSONAJE_DEFAULT;
-    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}`, personaje };
+    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}` };
     ws.seat = index;
     this.agregarViewer(ws);
 
-    // Ya no arranca sola al llenarse — queda 'completa' esperando a que el
-    // host mande INICIAR_PARTIDA (ver intentarIniciar). El lobby del cliente
-    // (scenes/lobby.tscn) es donde cada quien termina de elegir personaje
-    // antes de ese momento.
     if (this.estaLlena()) {
-      this.estado = 'completa';
+      this.estado = MODOS_QUE_ARRANCAN_SOLOS.has(this.modo) ? 'jugando' : 'completa';
     }
     return { ok: true };
   }
@@ -142,7 +124,6 @@ class Room {
     if (index === -1) return;
     this.asientos[index] = null;
     if (this.estado === 'completa') this.estado = 'esperando';
-    this._reasignarHostSiHaceFalta(ws);
   }
 
   // Socket se va de la sala del todo: libera su asiento (si tenía) y deja de
@@ -156,50 +137,6 @@ class Room {
     }
     this.viewers.delete(ws);
     if (this.partida) this.partida.destruir();
-    this._reasignarHostSiHaceFalta(ws);
-  }
-
-  // El host se fue antes de arrancar (dejó el asiento o se desconectó del
-  // todo) — le pasa el rol a otro sentado cualquiera para que la sala no
-  // quede sin nadie que pueda mandar INICIAR_PARTIDA. Si no queda nadie
-  // sentado, hostWs pasa a null (la sala se borra igual apenas viewers
-  // quede vacío, ver RoomManager.salirSala).
-  _reasignarHostSiHaceFalta(ws) {
-    if (this.hostWs !== ws) return;
-    const otro = this.asientos.find(Boolean);
-    this.hostWs = otro ? otro.ws : null;
-  }
-
-  // El jugador sentado en ESE asiento cambia su personaje elegido (desde el
-  // selector del lobby) — a diferencia de elegirAsiento, esto no toca qué
-  // asiento ocupa, solo el dato cosmético. Igual que el resto de las
-  // acciones de sala, el asiento SIEMPRE sale de ws.seat/asientoDe(ws),
-  // nunca de un índice que mande el cliente.
-  elegirPersonaje(ws, personajeId) {
-    const index = this.asientoDe(ws);
-    if (index === -1) {
-      return { ok: false, error: 'Todavía no elegiste un asiento en esta sala.' };
-    }
-    this.asientos[index].personaje = PERSONAJES_VALIDOS.has(personajeId) ? personajeId : PERSONAJE_DEFAULT;
-    return { ok: true };
-  }
-
-  // Disparado por INICIAR_PARTIDA — solo el host, solo con la mesa
-  // completa, y solo si el modo está habilitado a arrancar (ver
-  // MODOS_HABILITADOS). No arranca el motor acá mismo: eso lo sigue
-  // haciendo iniciarPartida(), llamado por RoomManager después de validar.
-  intentarIniciar(ws) {
-    if (!this.esHost(ws)) {
-      return { ok: false, error: 'Solo quien creó la sala puede iniciar la partida.' };
-    }
-    if (this.estado !== 'completa') {
-      return { ok: false, error: 'La mesa todavía no está completa.' };
-    }
-    if (!MODOS_HABILITADOS.has(this.modo)) {
-      return { ok: false, error: `El modo ${this.modo} todavía no está habilitado.` };
-    }
-    this.estado = 'jugando';
-    return { ok: true };
   }
 
   wsDe(index) {
@@ -223,12 +160,10 @@ class Room {
       modo: this.modo,
       capacidad: this.capacidad,
       estado: this.estado,
-      hostSeat: this.hostWs ? this.asientoDe(this.hostWs) : -1,
       asientos: this.asientos.map((slot, index) => ({
         index,
         ocupado: !!slot,
         nombre: slot ? slot.nombre : null,
-        personaje: slot ? slot.personaje : null,
       })),
     };
   }
@@ -309,11 +244,7 @@ class Room {
       [JUGADOR1]: this.asientos[JUGADOR1]?.nombre,
       [JUGADOR2]: this.asientos[JUGADOR2]?.nombre,
     };
-    const personajes = {
-      [JUGADOR1]: this.asientos[JUGADOR1]?.personaje,
-      [JUGADOR2]: this.asientos[JUGADOR2]?.personaje,
-    };
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, personajes });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
     partida.iniciarPartida();
   }
 
@@ -385,12 +316,10 @@ class Room {
     });
 
     const nombres = {};
-    const personajes = {};
     for (let asiento = 0; asiento < 4; asiento++) {
       nombres[asiento] = this.asientos[asiento]?.nombre;
-      personajes[asiento] = this.asientos[asiento]?.personaje;
     }
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, personajes });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
     partida.iniciarPartida();
   }
 }
@@ -400,7 +329,7 @@ class RoomManager {
     this.rooms = new Map();
   }
 
-  crearSala(ws, { nombreSala, modo, nombreJugador, puntosObjetivo, personajeId }) {
+  crearSala(ws, { nombreSala, modo, nombreJugador, puntosObjetivo }) {
     if (!CAPACIDAD_POR_MODO[modo]) {
       enviar(ws, { type: 'ERROR', message: `Modo de sala desconocido: ${modo}` });
       return null;
@@ -414,8 +343,7 @@ class RoomManager {
 
     const room = new Room(code, { nombreSala, modo, puntosObjetivo });
     this.rooms.set(code, room);
-    room.hostWs = ws;
-    room.elegirAsiento(ws, 0, nombreJugador, personajeId);
+    room.elegirAsiento(ws, 0, nombreJugador);
     enviar(ws, { type: 'SALA_CREADA', code, seat: 0 });
     enviar(ws, { type: 'DETALLE_SALA', ...room.snapshot() });
     return room;
@@ -444,7 +372,7 @@ class RoomManager {
     return room;
   }
 
-  elegirAsiento(ws, code, index, nombreJugador, personajeId) {
+  elegirAsiento(ws, code, index, nombreJugador) {
     const room = this.rooms.get((code || '').toUpperCase());
     if (!room) {
       enviar(ws, { type: 'ERROR', message: 'La sala no existe.' });
@@ -452,46 +380,17 @@ class RoomManager {
     }
     if (ws.roomCode && ws.roomCode !== room.code) this.salirSala(ws);
 
-    const resultado = room.elegirAsiento(ws, index, nombreJugador, personajeId);
+    const resultado = room.elegirAsiento(ws, index, nombreJugador);
     if (!resultado.ok) {
       enviar(ws, { type: 'ERROR', message: resultado.error });
       return;
     }
     enviar(ws, { type: 'ASIENTO_CONFIRMADO', code: room.code, asiento: index });
     room.broadcastLobby({ type: 'DETALLE_SALA', ...room.snapshot() });
-  }
 
-  // Cambiar el personaje elegido DESPUÉS de sentarse (desde el selector del
-  // lobby) — a diferencia de elegirAsiento, no cambia de asiento.
-  elegirPersonaje(ws, code, personajeId) {
-    const room = this.rooms.get((code || '').toUpperCase());
-    if (!room) {
-      enviar(ws, { type: 'ERROR', message: 'La sala no existe.' });
-      return;
+    if (room.estado === 'jugando') {
+      room.iniciarPartida();
     }
-    const resultado = room.elegirPersonaje(ws, personajeId);
-    if (!resultado.ok) {
-      enviar(ws, { type: 'ERROR', message: resultado.error });
-      return;
-    }
-    room.broadcastLobby({ type: 'DETALLE_SALA', ...room.snapshot() });
-  }
-
-  // El host aprieta "Iniciar Partida" en el lobby — ver Room.intentarIniciar
-  // para las validaciones (solo host, mesa completa, modo habilitado).
-  iniciarPartidaSolicitada(ws, code) {
-    const room = this.rooms.get((code || '').toUpperCase());
-    if (!room) {
-      enviar(ws, { type: 'ERROR', message: 'La sala no existe.' });
-      return;
-    }
-    const resultado = room.intentarIniciar(ws);
-    if (!resultado.ok) {
-      enviar(ws, { type: 'ERROR', message: resultado.error });
-      return;
-    }
-    room.broadcastLobby({ type: 'DETALLE_SALA', ...room.snapshot() });
-    room.iniciarPartida();
   }
 
   dejarAsiento(ws, code) {
