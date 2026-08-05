@@ -229,7 +229,14 @@ class Partida extends EventEmitter {
     // n === 3
     const r3 = this.resultadosRondas[2];
     if (r3 !== -1) return r3;
-    // Ronda 3 también parda: gana el Mano (desempate, sección 9)
+    // Ronda 3 también parda. Para llegar acá con r1 !== -1, ronda 1 y ronda 2
+    // tuvieron que tener ganadores distintos (1 a 1: ver el "return -1" de
+    // arriba — es el único camino que deja la mano sin decidir en n===2 con
+    // r1 con ganador) — en ese caso gana quien ganó la PRIMERA ronda, no "el
+    // Mano" (sección 9: la parda de la 3ra no le da nada al que perdió la 1ra).
+    if (r1 !== -1) return r1;
+    // Achica el otro caso: r1 y r2 fueron parda-parda, y ahora también la
+    // ronda 3 — recién en un triple empate desempata el Mano (sección 9).
     return this.jugadorEsMano ? JUGADOR1 : JUGADOR2;
   }
 

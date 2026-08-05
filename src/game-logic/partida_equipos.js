@@ -277,7 +277,14 @@ class PartidaEquipos extends EventEmitter {
 
     const r3 = this.resultadosRondas[2];
     if (r3 !== -1) return r3;
-    return equipoDe((this.repartidor + 1) % NUM_ASIENTOS); // desempate: equipo del Mano
+    // Ronda 3 también parda — mismo criterio que partida.js (1v1): si ronda 1
+    // tuvo ganador, ronda 1 y ronda 2 fueron necesariamente 1 a 1 (único
+    // camino que deja la mano sin decidir en n===2 con r1 con ganador), y ahí
+    // gana el equipo que ganó la PRIMERA ronda, no "el Mano" (sección 9).
+    if (r1 !== -1) return r1;
+    // r1 y r2 fueron parda-parda, y ahora también la ronda 3: recién en un
+    // triple empate desempata el equipo del Mano (sección 9).
+    return equipoDe((this.repartidor + 1) % NUM_ASIENTOS);
   }
 
   // ---------------------------------------------------------
