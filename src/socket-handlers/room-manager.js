@@ -65,6 +65,16 @@ class Room {
     // sentados) — reciben DETALLE_SALA cada vez que cambia algo.
     this.viewers = new Set();
     this.partida = null;
+    // true apenas el motor emite 'partidaTerminada' (ver _iniciarPartida1v1 /
+    // _iniciarPartidaEquipos) — `estado` se queda en 'jugando' incluso
+    // después de que la partida terminó (nadie lo cambia), así que sin esta
+    // bandera una desconexión que llega justo después de un final legítimo
+    // (p.ej. el ganador cierra el cliente al instante de ganar) se leía como
+    // abandono en salirSala() y mandaba un SEGUNDO PARTIDA_TERMINADA
+    // contradictorio (declarando ganador al equipo/jugador que ya había
+    // perdido, porque _declararGanadorPorAbandono invierte el resultado en
+    // base a quién se fue).
+    this.partidaTerminada = false;
   }
 
   ocupados() {
@@ -208,6 +218,7 @@ class Room {
     });
 
     partida.on('partidaTerminada', (ganador) => {
+      this.partidaTerminada = true;
       this.broadcast({ type: 'PARTIDA_TERMINADA', ganador });
     });
 
@@ -275,6 +286,7 @@ class Room {
     });
 
     partida.on('partidaTerminada', (ganadorEquipo) => {
+      this.partidaTerminada = true;
       this.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo });
     });
 
@@ -433,9 +445,12 @@ class RoomManager {
 
     // room.asientoDe(ws) hay que leerlo ANTES de jugadorDesconectado (que
     // limpia el asiento) — es lo único que nos dice quién se fue y, con eso,
-    // quién ganó por abandono.
+    // quién ganó por abandono. El chequeo de !room.partidaTerminada evita
+    // declarar un abandono (y mandar un PARTIDA_TERMINADA contradictorio) si
+    // la partida ya se cerró de forma legítima un instante antes — ver el
+    // comentario en el constructor de Room sobre `partidaTerminada`.
     const seatIndex = room.asientoDe(ws);
-    const estabaJugando = room.estado === 'jugando' && seatIndex !== -1;
+    const estabaJugando = room.estado === 'jugando' && seatIndex !== -1 && !room.partidaTerminada;
     room.jugadorDesconectado(ws);
 
     if (estabaJugando) {
