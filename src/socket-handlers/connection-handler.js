@@ -135,6 +135,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.mirar(ws, mensaje.yaw, mensaje.pitch);
       return;
 
+    // Cosmético (efecto "ojos saltones" al hacer zoom) — mismo patrón que
+    // MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
+    case 'OJOS':
+      roomManager.ojos(ws, mensaje.activo);
+      return;
+
     // Chat en vivo entre los jugadores sentados en la sala — mismo patrón
     // que MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
     case 'CHAT_MENSAJE':

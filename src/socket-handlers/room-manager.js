@@ -419,6 +419,16 @@ class RoomManager {
     room.broadcast({ type: 'MIRAR', asiento: ws.seat, yaw: yawSeguro, pitch: pitchSeguro });
   }
 
+  // Reenvía el efecto "ojos saltones" (zoom con click derecho) de ws al
+  // resto de la sala — mismo criterio que mirar(): puro relay, no pasa por
+  // Partida/PartidaEquipos ni valida turno. El asiento SIEMPRE es ws.seat,
+  // nunca lo que mande el cliente.
+  ojos(ws, activo) {
+    const room = this.salaDe(ws);
+    if (!room || ws.seat === undefined || ws.seat < 0) return;
+    room.broadcast({ type: 'OJOS', asiento: ws.seat, activo: Boolean(activo) });
+  }
+
   // Chat en vivo — mismo criterio que mirar(): puro relay entre los sentados
   // de la sala, no pasa por Partida/PartidaEquipos ni valida turno. El
   // asiento y el nombre SIEMPRE salen del propio servidor (room.asientos),

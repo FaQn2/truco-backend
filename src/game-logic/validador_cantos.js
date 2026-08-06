@@ -16,9 +16,10 @@ const TIER_ENVIDO = {
 };
 
 // ¿Se puede subir la apuesta de Envido cantando "nuevo" luego de la cadena ya cantada?
-// "Envido" se puede repetir mientras el máximo hasta ahora siga siendo Envido
-// (Envido -> Envido -> Envido...). Real Envido y Falta Envido solo suben, nunca
-// se repiten ni se puede volver a un escalón menor.
+// "Envido" solo se puede revirar UNA vez (Envido -> Envido), sección 6: "Envido Envido".
+// Un tercer "Envido" no existe en la escala: de ahí en más solo se puede subir a
+// Real Envido o Falta Envido. Real Envido y Falta Envido solo suben, nunca se
+// repiten ni se puede volver a un escalón menor.
 function puedeSubirEnvido(cadenaEnvido, nuevo) {
   if (cadenaEnvido.length === 0) return false;
   const ultimo = cadenaEnvido[cadenaEnvido.length - 1];
@@ -26,7 +27,7 @@ function puedeSubirEnvido(cadenaEnvido, nuevo) {
   const tierActual = TIER_ENVIDO[ultimo] || 0;
   const tierNuevo = TIER_ENVIDO[nuevo] || 0;
   if (tierNuevo === 0) return false;
-  if (nuevo === 'ENVIDO') return tierActual === 1;
+  if (nuevo === 'ENVIDO') return tierActual === 1 && cadenaEnvido.length === 1;
   return tierNuevo > tierActual;
 }
 
