@@ -298,6 +298,12 @@ class PartidaEquipos extends EventEmitter {
     // Interrumpir un Truco sin responder: cualquiera de los 2 del equipo
     // contrario al que cantó ese Truco (sección 6 y 17).
     if (interrumpeTruco && equipoDe(asiento) === equipoDe(this._quienCantoTruco)) return false;
+    // Sección 6: el Envido se cierra en cuanto ESE asiento ya puso su carta
+    // sobre la mesa esta ronda, aunque su compañero de equipo todavía tenga
+    // margen para interrumpir — ya usó su oportunidad de cantar Envido al
+    // elegir tirar la carta en vez de cantar (mismo hueco que en 1v1,
+    // partida.js, encontrado y corregido 2026-08-05).
+    if (interrumpeTruco && this._cartasJugadasRonda[asiento]) return false;
     // Fuera de una interrupción, solo puede abrir quien tiene el turno.
     if (!interrumpeTruco && asiento !== this.turnoActual) return false;
     if (!puedeCantar(tipo, estado, true, this.rondaActual, this.envidoResuelto)) return false;

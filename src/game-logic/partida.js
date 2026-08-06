@@ -250,6 +250,13 @@ class Partida extends EventEmitter {
     // Si se está interrumpiendo un Truco sin responder, solo puede hacerlo
     // el jugador contrario al que cantó ese Truco (sección 6).
     if (interrumpeTruco && jugadorId === this._quienCantoTruco) return false;
+    // Sección 6: el Envido se cierra en cuanto YO ya puse mi carta sobre la
+    // mesa esta ronda, aunque el Truco recién cantado por el rival siga sin
+    // responder y en teoría "me toque a mí" contestarlo — ya usé mi
+    // oportunidad de cantar Envido en el momento en que elegí tirar la
+    // carta en vez de cantar (bug encontrado y corregido en el cliente
+    // Godot 2026-08-05, mismo hueco acá).
+    if (interrumpeTruco && this._cartasJugadasRonda[jugadorId]) return false;
     // Fuera de una interrupción, solo puede abrir el Envido quien tiene el
     // turno (docs/Reglas_Truco_Argentino.md sección 6: "el jugador solo
     // puede cantar cuando es su turno de tirar o cantar").
