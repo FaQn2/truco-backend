@@ -66,7 +66,15 @@ function puedeCantar(accion, estado, jugadorEsElQueCanto, ronda, envidoResuelto)
       );
 
     case 'IR_AL_MAZO':
-      return estado === Estado.ESPERANDO_JUGADA;
+      // Reemplaza a tirar carta en tu turno (ESPERANDO_JUGADA), pero también
+      // sirve para rendirse directo en vez de responder Quiero/No Quiero a
+      // un Envido o Truco que cantó el rival (sección 10: "en cualquier
+      // momento de cualquier ronda") — mismo criterio de "sos el que
+      // responde" que QUIERO/NO_QUIERO.
+      return (
+        estado === Estado.ESPERANDO_JUGADA ||
+        (!jugadorEsElQueCanto && [Estado.RESOLVIENDO_ENVIDO, Estado.RESOLVIENDO_TRUCO].includes(estado))
+      );
 
     default:
       return false;

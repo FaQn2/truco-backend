@@ -463,23 +463,45 @@ class Partida extends EventEmitter {
   // ---------------------------------------------------------
 
   irseAlMazo(jugadorId) {
-    // Irse al mazo reemplaza a tirar carta en tu turno, no es una respuesta
-    // a un canto pendiente (para eso está "No Quiero") — mismo chequeo de
-    // turno que cantarTruco/cantarEnvido.
-    if (jugadorId !== this.turnoActual) return false;
-    if (!puedeCantar('IR_AL_MAZO', this.maquina.estadoActual, true, this.rondaActual, this.envidoResuelto)) {
+    // Además de tirar carta en tu turno, también sirve para rendirse directo
+    // en vez de responder Quiero/No Quiero a un Envido o Truco que cantó el
+    // rival (sección 10: "en cualquier momento de cualquier ronda").
+    const estado = this.maquina.estadoActual;
+    let jugadorEsElQueCanto = false;
+    if (estado === Estado.RESOLVIENDO_ENVIDO) {
+      jugadorEsElQueCanto = jugadorId === this._quienCantoEnvido;
+    } else if (estado === Estado.RESOLVIENDO_TRUCO) {
+      jugadorEsElQueCanto = jugadorId === this._quienCantoTruco;
+    } else if (jugadorId !== this.turnoActual) {
+      return false;
+    }
+    if (!puedeCantar('IR_AL_MAZO', estado, jugadorEsElQueCanto, this.rondaActual, this.envidoResuelto)) {
       return false;
     }
     this.emit('cantoRealizado', 'ME_VOY_AL_MAZO', jugadorId);
     const rival = this.rival(jugadorId);
-    let puntos = 1;
-    if (this.trucoNivel > 0) {
-      const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
-      puntos = Constants.PUNTOS_TRUCO[cantoActual] || 1;
-    }
-    this._sumarPuntos(rival, puntos);
+    this._sumarPuntos(rival, this._puntosIrseAlMazo(estado));
     this._finDeMano(rival);
     return true;
+  }
+
+  // Cuántos puntos se lleva el rival si jugadorId se va al mazo AHORA MISMO
+  // (sección 10): con un Envido/Truco cantado y sin responder, el mismo
+  // costo que decir "No Quiero"; si no hay nada pendiente, el valor del
+  // Truco ya confirmado (o 1 si todavía no se cantó nada).
+  _puntosIrseAlMazo(estado) {
+    if (estado === Estado.RESOLVIENDO_ENVIDO) {
+      return this._cadenaEnvido.length;
+    }
+    if (estado === Estado.RESOLVIENDO_TRUCO) {
+      const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
+      return Constants.PUNTOS_NO_QUERIDO_TRUCO[cantoActual] || 1;
+    }
+    if (this.trucoNivel > 0) {
+      const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
+      return Constants.PUNTOS_TRUCO[cantoActual] || 1;
+    }
+    return 1;
   }
 
   // ---------------------------------------------------------

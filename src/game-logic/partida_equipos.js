@@ -573,8 +573,26 @@ class PartidaEquipos extends EventEmitter {
 
   irseAlMazo(asiento) {
     if (this._idosAlMazo.has(asiento)) return false;
-    if (asiento !== this.turnoActual) return false;
-    if (!puedeCantar('IR_AL_MAZO', this.maquina.estadoActual, true, this.rondaActual, this.envidoResuelto)) {
+
+    // Además de tirar carta en tu turno, también sirve para rendirse directo
+    // en vez de responder Quiero/No Quiero a un Envido o Truco que cantó el
+    // EQUIPO rival (sección 10) — cualquiera de los 2 compañeros que debe
+    // responder puede hacerlo, mismo criterio que responderEnvido/Truco.
+    const estado = this.maquina.estadoActual;
+    let respondiendoEnvido = false;
+    let respondiendoTruco = false;
+    if (estado === Estado.RESOLVIENDO_ENVIDO) {
+      if (equipoDe(asiento) === equipoDe(this._quienCantoEnvido)) return false;
+      respondiendoEnvido = true;
+    } else if (estado === Estado.RESOLVIENDO_TRUCO) {
+      if (equipoDe(asiento) !== this._equipoDebeResponderTruco) return false;
+      respondiendoTruco = true;
+    } else if (asiento !== this.turnoActual) {
+      return false;
+    }
+    // jugadorEsElQueCanto siempre es false acá: los chequeos de equipoDe(...)
+    // de arriba ya descartaron el caso "asiento es del equipo que cantó".
+    if (!puedeCantar('IR_AL_MAZO', estado, false, this.rondaActual, this.envidoResuelto)) {
       return false;
     }
 
@@ -585,31 +603,51 @@ class PartidaEquipos extends EventEmitter {
     if (this._idosAlMazo.has(this.companeroDe(asiento))) {
       // Los 2 del equipo ya se fueron: termina la mano a favor del rival
       // (sección 10: "si todos los jugadores del equipo se van al mazo,
-      // pierden todos los puntos pendientes").
+      // pierden todos los puntos pendientes") — con el mismo costo que
+      // tendría decir "No Quiero" si había un Envido/Truco sin responder.
       const rival = this.rivalEquipo(miEquipo);
-      let puntos = 1;
-      if (this.trucoNivel > 0) {
-        const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
-        puntos = Constants.PUNTOS_TRUCO[cantoActual] || 1;
-      }
-      this._sumarPuntos(rival, puntos);
+      this._sumarPuntos(rival, this._puntosIrseAlMazo(estado));
       this._finDeMano(rival);
       return true;
     }
 
-    // El compañero sigue jugando con normalidad (sección 10). Si con este
-    // jugador afuera ya no queda nadie más por tirar en la ronda en curso,
-    // se resuelve la ronda con lo que ya se jugó; si no, sigue el turno.
-    if (this._rondaCompleta()) {
+    // El compañero sigue jugando con normalidad (sección 10): si había un
+    // Envido/Truco pendiente, lo puede seguir respondiendo con normalidad
+    // (los chequeos de equipoDe(...) en responderEnvido/responderTruco ya
+    // excluyen a este asiento vía _idosAlMazo). Si en cambio estábamos en
+    // ESPERANDO_JUGADA y con este jugador afuera ya no queda nadie más por
+    // tirar en la ronda en curso, se resuelve con lo ya jugado.
+    if (!respondiendoEnvido && !respondiendoTruco && this._rondaCompleta()) {
       this.maquina.transicionar(Estado.EVALUANDO_MESA);
       this._resolverRonda();
       this._cartasJugadasRonda = {};
       return true;
     }
 
-    this.turnoActual = this._siguienteAsiento(asiento);
-    this.emit('turnoCambiado', this.turnoActual);
+    if (!respondiendoEnvido && !respondiendoTruco) {
+      this.turnoActual = this._siguienteAsiento(asiento);
+      this.emit('turnoCambiado', this.turnoActual);
+    }
     return true;
+  }
+
+  // Cuántos puntos se lleva el equipo rival si los 2 jugadores del equipo de
+  // asiento terminan yéndose al mazo (sección 10): con un Envido/Truco
+  // cantado y sin responder, el mismo costo que decir "No Quiero"; si no hay
+  // nada pendiente, el valor del Truco ya confirmado (o 1 si no se cantó).
+  _puntosIrseAlMazo(estado) {
+    if (estado === Estado.RESOLVIENDO_ENVIDO) {
+      return this._cadenaEnvido.length;
+    }
+    if (estado === Estado.RESOLVIENDO_TRUCO) {
+      const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
+      return Constants.PUNTOS_NO_QUERIDO_TRUCO[cantoActual] || 1;
+    }
+    if (this.trucoNivel > 0) {
+      const cantoActual = ORDEN_TRUCO[this.trucoNivel - 1];
+      return Constants.PUNTOS_TRUCO[cantoActual] || 1;
+    }
+    return 1;
   }
 
   // ---------------------------------------------------------
