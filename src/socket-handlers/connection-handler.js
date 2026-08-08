@@ -128,6 +128,14 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.salirSala(ws);
       return;
 
+    // "¡Revancha!" — confirma que ws quiere otra partida en la misma sala
+    // (ver Room.confirmarRevancha). No es una acción de juego (no requiere
+    // partida en curso, es al revés: solo tiene sentido cuando ya terminó),
+    // así que se resuelve acá directo, no en manejarAccionDeJuego.
+    case 'REVANCHA_CONFIRMAR':
+      roomManager.confirmarRevancha(ws);
+      return;
+
     // Cosmético (gira la cabeza del modelo 3D hacia donde mira cada
     // jugador) — no es una acción de juego: no pasa por manejarAccionDeJuego
     // ni requiere partida en curso, así que se resuelve acá directo.

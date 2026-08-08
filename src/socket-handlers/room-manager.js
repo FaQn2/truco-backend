@@ -20,6 +20,10 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const PUNTOS_OBJETIVO_DEFAULT = 30;
 const CHAT_LARGO_MAXIMO = 200;
+// "¡Revancha!" — ventana para que todos los sentados confirmen que quieren
+// otra partida antes de que el server dé la sala por perdida y mande a
+// todos de vuelta al lobby (ver Room.iniciarRevancha).
+const REVANCHA_PLAZO_SEGUNDOS = 30;
 
 // Cantidad de asientos por modo.
 const CAPACIDAD_POR_MODO = { '1v1': 2, '2v2': 4 };
@@ -75,6 +79,13 @@ class Room {
     // perdido, porque _declararGanadorPorAbandono invierte el resultado en
     // base a quién se fue).
     this.partidaTerminada = false;
+
+    // Ventana de "¡Revancha!" activa (null si no hay ninguna en curso) — ver
+    // iniciarRevancha/confirmarRevancha/_revanchaVencida. Solo existe entre
+    // un final de partida NORMAL (nunca tras un abandono: ahí la sala ya se
+    // borra sola, ver RoomManager.salirSala) y que se resuelva (todos
+    // confirman, se acaba el tiempo, o alguien se desconecta).
+    this.revancha = null;
   }
 
   ocupados() {
@@ -181,13 +192,71 @@ class Room {
   // Arranca la partida real — elige el motor según la capacidad de la sala.
   // Conecta cada evento del motor a los sockets de la sala, filtrando la
   // información privada (cada jugador recibe SOLO su mano, y en 2v2 también
-  // la de su compañero — nunca las del equipo rival).
+  // la de su compañero — nunca las del equipo rival). También la usa la
+  // revancha para arrancar una partida nueva en la misma sala — por eso
+  // primero destruye cualquier `partida` vieja que haya quedado colgada
+  // (normalmente no la hay: ver el comentario en `partidaTerminada`).
   iniciarPartida() {
+    if (this.partida) this.partida.destruir();
     if (this.capacidad === 4) {
       this._iniciarPartidaEquipos();
     } else {
       this._iniciarPartida1v1();
     }
+  }
+
+  // ---------------------------------------------------------
+  // "¡Revancha!" — ver comentario de this.revancha en el constructor.
+  // ---------------------------------------------------------
+
+  iniciarRevancha() {
+    if (this.revancha) clearTimeout(this.revancha.timeoutId);
+    this.revancha = {
+      confirmados: new Set(),
+      timeoutId: setTimeout(() => this._revanchaVencida(), REVANCHA_PLAZO_SEGUNDOS * 1000),
+    };
+    this.broadcast({ type: 'REVANCHA_DISPONIBLE', plazoSegundos: REVANCHA_PLAZO_SEGUNDOS });
+  }
+
+  // Devuelve false si no hay ninguna revancha en curso para este asiento
+  // (ya venció, ya se confirmó entera, o ws no está sentado acá) — el
+  // llamador (RoomManager.confirmarRevancha) le manda un ERROR al cliente
+  // en ese caso.
+  confirmarRevancha(ws) {
+    if (!this.revancha) return false;
+    const seat = this.asientoDe(ws);
+    if (seat === -1) return false;
+
+    this.revancha.confirmados.add(seat);
+    this.broadcast({ type: 'REVANCHA_ESTADO', confirmados: [...this.revancha.confirmados] });
+
+    if (this.revancha.confirmados.size >= this.capacidad) {
+      clearTimeout(this.revancha.timeoutId);
+      this.revancha = null;
+      // La partida terminó de forma normal para llegar hasta acá (una
+      // revancha nunca arranca tras un abandono), así que hay que volver a
+      // habilitar tanto partidaTerminada como el chequeo de abandono en
+      // salirSala() para la partida NUEVA que arranca ahora.
+      this.partidaTerminada = false;
+      this.iniciarPartida();
+    }
+    return true;
+  }
+
+  _revanchaVencida() {
+    if (!this.revancha) return;
+    this.revancha = null;
+    this.broadcast({ type: 'REVANCHA_CANCELADA', motivo: 'tiempo' });
+  }
+
+  // Alguien se desconectó mientras la ventana de revancha seguía abierta:
+  // no tiene sentido seguir esperando a los demás — se cancela para todos
+  // (RoomManager.salirSala es quien borra la Room del mapa después de esto).
+  cancelarRevanchaPorDesconexion(asientoQueSeFue) {
+    if (!this.revancha) return;
+    clearTimeout(this.revancha.timeoutId);
+    this.revancha = null;
+    this.broadcast({ type: 'REVANCHA_CANCELADA', motivo: 'desconexion', asiento: asientoQueSeFue });
   }
 
   _iniciarPartida1v1() {
@@ -220,6 +289,7 @@ class Room {
     partida.on('partidaTerminada', (ganador) => {
       this.partidaTerminada = true;
       this.broadcast({ type: 'PARTIDA_TERMINADA', ganador });
+      this.iniciarRevancha();
     });
 
     partida.on('puntosActualizados', (puntos) => {
@@ -288,6 +358,7 @@ class Room {
     partida.on('partidaTerminada', (ganadorEquipo) => {
       this.partidaTerminada = true;
       this.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo });
+      this.iniciarRevancha();
     });
 
     partida.on('puntosActualizados', (puntos) => {
@@ -461,6 +532,12 @@ class RoomManager {
     // comentario en el constructor de Room sobre `partidaTerminada`.
     const seatIndex = room.asientoDe(ws);
     const estabaJugando = room.estado === 'jugando' && seatIndex !== -1 && !room.partidaTerminada;
+    // La partida ya terminó (room.partidaTerminada === true), pero seguía
+    // abierta la ventana de "¡Revancha!" — sin este chequeo, este caso caía
+    // en la rama de "estaba en el lobby" de más abajo, que solo actualiza
+    // DETALLE_SALA (a nadie, porque ya nadie está mirando esa pantalla) y
+    // deja a los demás esperando confirmaciones que nunca van a llegar.
+    const estabaEnRevancha = seatIndex !== -1 && !!room.revancha;
     room.jugadorDesconectado(ws);
 
     if (estabaJugando) {
@@ -468,6 +545,15 @@ class RoomManager {
       // arrancada, no tiene sentido seguir — se termina ahí mismo y gana
       // el/los que quedaron.
       this._declararGanadorPorAbandono(room, seatIndex);
+      this.rooms.delete(room.code);
+      return;
+    }
+
+    if (estabaEnRevancha) {
+      // Mismo criterio "sin reconexión": si uno se va mientras los demás
+      // esperaban confirmación, no tiene sentido seguir esperando — se
+      // cancela para todos y se manda a la sala de multijugador.
+      room.cancelarRevanchaPorDesconexion(seatIndex);
       this.rooms.delete(room.code);
       return;
     }
@@ -492,6 +578,21 @@ class RoomManager {
     } else {
       const ganador = seatIndexQueSeFue === JUGADOR1 ? JUGADOR2 : JUGADOR1;
       room.broadcast({ type: 'PARTIDA_TERMINADA', ganador, abandono: true, asientoAbandono: seatIndexQueSeFue });
+    }
+  }
+
+  // "¡Revancha!" — ws confirma que quiere otra partida en la misma sala.
+  // Mismo criterio de nunca confiar en el cliente que el resto de las
+  // acciones: el asiento sale de ws.seat (vía Room.asientoDe), nunca de lo
+  // que mande el mensaje.
+  confirmarRevancha(ws) {
+    const room = this.salaDe(ws);
+    if (!room) {
+      enviar(ws, { type: 'ERROR', message: 'No estás en ninguna sala.' });
+      return;
+    }
+    if (!room.confirmarRevancha(ws)) {
+      enviar(ws, { type: 'ERROR', message: 'No se puede confirmar la revancha ahora.' });
     }
   }
 
