@@ -62,6 +62,12 @@ class Partida extends EventEmitter {
     // Quien "tiene el quiero" del nivel de Truco vigente — solo ese jugador
     // puede subir la apuesta más adelante, en cualquier ronda de la mano.
     this._quienPuedeSubirTruco = -1;
+    // true en cuanto se responde CUALQUIER canto de Truco (Quiero/No
+    // Quiero/subir) por primera vez en la mano — "el envido está primero"
+    // (sección 6) solo aplica mientras el Truco original sigue sin ninguna
+    // respuesta; una vez respondido (aunque sea subiendo a Retruco) esa
+    // ventana ya no se reabre con las subidas siguientes.
+    this._trucoYaRespondido = false;
 
     this._finDeManoTimeoutId = null;
   }
@@ -101,6 +107,7 @@ class Partida extends EventEmitter {
     this.trucoNivel = 0;
     this._quienCantoTruco = -1;
     this._quienPuedeSubirTruco = -1;
+    this._trucoYaRespondido = false;
 
     this.jugadorEsMano = this.repartidor === JUGADOR2;
     this._quienIniciaRonda = this.jugadorEsMano ? JUGADOR1 : JUGADOR2;
@@ -250,6 +257,11 @@ class Partida extends EventEmitter {
     // Si se está interrumpiendo un Truco sin responder, solo puede hacerlo
     // el jugador contrario al que cantó ese Truco (sección 6).
     if (interrumpeTruco && jugadorId === this._quienCantoTruco) return false;
+    // Y solo mientras ESE Truco original siga sin ninguna respuesta — si ya
+    // se respondió (aunque haya sido subiendo a Retruco/Vale Cuatro en vez
+    // de interrumpir con Envido), la ventana ya se cerró para toda la mano
+    // (bug reportado y corregido en el cliente Godot 2026-08-10, mismo hueco acá).
+    if (interrumpeTruco && this._trucoYaRespondido) return false;
     // Sección 6: el Envido se cierra en cuanto YO ya puse mi carta sobre la
     // mesa esta ronda, aunque el Truco recién cantado por el rival siga sin
     // responder y en teoría "me toque a mí" contestarlo — ya usé mi
@@ -427,6 +439,7 @@ class Partida extends EventEmitter {
     ) {
       return false;
     }
+    this._trucoYaRespondido = true;
 
     if (!quiero) {
       this.emit('cantoRealizado', 'NO_QUIERO', jugadorId);

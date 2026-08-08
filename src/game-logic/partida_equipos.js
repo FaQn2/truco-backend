@@ -78,6 +78,11 @@ class PartidaEquipos extends EventEmitter {
     // queda cerrada para los 2").
     this._equipoDebeResponderTruco = -1;
     this._equipoPuedeSubirTruco = -1;
+    // true en cuanto se responde CUALQUIER canto de Truco (Quiero/No
+    // Quiero/subir) por primera vez en la mano — mismo motivo que en
+    // partida.js (1v1): "el envido está primero" solo aplica mientras el
+    // Truco original sigue sin ninguna respuesta.
+    this._trucoYaRespondido = false;
 
     this._finDeManoTimeoutId = null;
   }
@@ -136,6 +141,7 @@ class PartidaEquipos extends EventEmitter {
     this._quienCantoTruco = -1;
     this._equipoDebeResponderTruco = -1;
     this._equipoPuedeSubirTruco = -1;
+    this._trucoYaRespondido = false;
 
     const mano = (this.repartidor + 1) % NUM_ASIENTOS; // Mano = a la derecha del repartidor
     this._quienIniciaRonda = mano;
@@ -298,6 +304,11 @@ class PartidaEquipos extends EventEmitter {
     // Interrumpir un Truco sin responder: cualquiera de los 2 del equipo
     // contrario al que cantó ese Truco (sección 6 y 17).
     if (interrumpeTruco && equipoDe(asiento) === equipoDe(this._quienCantoTruco)) return false;
+    // Y solo mientras ESE Truco original siga sin ninguna respuesta — si ya
+    // se respondió (aunque haya sido subiendo a Retruco/Vale Cuatro en vez
+    // de interrumpir con Envido), la ventana ya se cerró para toda la mano
+    // (bug reportado y corregido en el cliente Godot 2026-08-10, mismo hueco acá).
+    if (interrumpeTruco && this._trucoYaRespondido) return false;
     // Sección 6: el Envido se cierra en cuanto ESE asiento ya puso su carta
     // sobre la mesa esta ronda, aunque su compañero de equipo todavía tenga
     // margen para interrumpir — ya usó su oportunidad de cantar Envido al
@@ -539,6 +550,7 @@ class PartidaEquipos extends EventEmitter {
     if (equipoDe(asiento) !== this._equipoDebeResponderTruco) return false;
     const accion = quiero ? 'QUIERO' : 'NO_QUIERO';
     if (!puedeCantar(accion, this.maquina.estadoActual, false, this.rondaActual, this.envidoResuelto)) return false;
+    this._trucoYaRespondido = true;
 
     if (!quiero) {
       this.emit('cantoRealizado', 'NO_QUIERO', asiento);
