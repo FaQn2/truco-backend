@@ -257,11 +257,15 @@ class Partida extends EventEmitter {
     // Si se está interrumpiendo un Truco sin responder, solo puede hacerlo
     // el jugador contrario al que cantó ese Truco (sección 6).
     if (interrumpeTruco && jugadorId === this._quienCantoTruco) return false;
-    // Y solo mientras ESE Truco original siga sin ninguna respuesta — si ya
-    // se respondió (aunque haya sido subiendo a Retruco/Vale Cuatro en vez
-    // de interrumpir con Envido), la ventana ya se cerró para toda la mano
-    // (bug reportado y corregido en el cliente Godot 2026-08-10, mismo hueco acá).
-    if (interrumpeTruco && this._trucoYaRespondido) return false;
+    // Una vez que el Truco cantado en esta mano ya fue respondido (aunque
+    // haya sido subiendo a Retruco/Vale Cuatro en vez de interrumpir con
+    // Envido), la ventana para cantar Envido se cierra para el resto de la
+    // mano — no solo mientras dure la interrupción. Antes este chequeo solo
+    // corría con interrumpeTruco==true, así que una vez que el Truco pasaba
+    // a ESPERANDO_JUGADA (por un "Quiero" plano) el Envido se podía seguir
+    // cantando igual (bug reportado 2026-08-19: jugador quiso el Truco y
+    // después pudo cantar Envido).
+    if (this._trucoYaRespondido) return false;
     // Sección 6: el Envido se cierra en cuanto YO ya puse mi carta sobre la
     // mesa esta ronda, aunque el Truco recién cantado por el rival siga sin
     // responder y en teoría "me toque a mí" contestarlo — ya usé mi

@@ -304,11 +304,12 @@ class PartidaEquipos extends EventEmitter {
     // Interrumpir un Truco sin responder: cualquiera de los 2 del equipo
     // contrario al que cantó ese Truco (sección 6 y 17).
     if (interrumpeTruco && equipoDe(asiento) === equipoDe(this._quienCantoTruco)) return false;
-    // Y solo mientras ESE Truco original siga sin ninguna respuesta — si ya
-    // se respondió (aunque haya sido subiendo a Retruco/Vale Cuatro en vez
-    // de interrumpir con Envido), la ventana ya se cerró para toda la mano
-    // (bug reportado y corregido en el cliente Godot 2026-08-10, mismo hueco acá).
-    if (interrumpeTruco && this._trucoYaRespondido) return false;
+    // Una vez que el Truco cantado en esta mano ya fue respondido (aunque
+    // haya sido subiendo a Retruco/Vale Cuatro en vez de interrumpir con
+    // Envido), la ventana para cantar Envido se cierra para el resto de la
+    // mano — no solo mientras dure la interrupción (mismo bug que en
+    // partida.js, encontrado y corregido 2026-08-19).
+    if (this._trucoYaRespondido) return false;
     // Sección 6: el Envido se cierra en cuanto ESE asiento ya puso su carta
     // sobre la mesa esta ronda, aunque su compañero de equipo todavía tenga
     // margen para interrumpir — ya usó su oportunidad de cantar Envido al
