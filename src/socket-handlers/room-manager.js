@@ -500,6 +500,18 @@ class RoomManager {
     room.broadcast({ type: 'OJOS', asiento: ws.seat, activo: Boolean(activo) });
   }
 
+  // Reenvía una seña (gesto facial deliberado del sistema real de señas,
+  // 2v2 online) de ws al resto de la sala — mismo criterio que ojos()/
+  // mirar(): puro relay, no pasa por Partida/PartidaEquipos ni valida
+  // turno. A diferencia de una jugada real, una seña es cosmética del lado
+  // del servidor: no hay nada que validar más allá de quién la mandó. El
+  // asiento SIEMPRE es ws.seat, nunca lo que mande el cliente.
+  sena(ws, tipo, activo) {
+    const room = this.salaDe(ws);
+    if (!room || ws.seat === undefined || ws.seat < 0) return;
+    room.broadcast({ type: 'SENA', asiento: ws.seat, tipo: String(tipo || ''), activo: Boolean(activo) });
+  }
+
   // Chat en vivo — mismo criterio que mirar(): puro relay entre los sentados
   // de la sala, no pasa por Partida/PartidaEquipos ni valida turno. El
   // asiento y el nombre SIEMPRE salen del propio servidor (room.asientos),

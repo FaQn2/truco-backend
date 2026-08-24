@@ -149,6 +149,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.ojos(ws, mensaje.activo);
       return;
 
+    // Seña real de Truco (gesto facial deliberado, 2v2 online) — mismo
+    // patrón que OJOS/MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
+    case 'SENA':
+      roomManager.sena(ws, mensaje.tipo, mensaje.activo);
+      return;
+
     // Chat en vivo entre los jugadores sentados en la sala — mismo patrón
     // que MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
     case 'CHAT_MENSAJE':
