@@ -5,6 +5,7 @@
 // la variable de entorno PORT (default 3000).
 // ============================================================
 
+const http = require('http');
 const { WebSocketServer } = require('ws');
 const { RoomManager } = require('./src/socket-handlers/room-manager');
 const { manejarConexion } = require('./src/socket-handlers/connection-handler');
@@ -27,13 +28,30 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const roomManager = new RoomManager();
-const wss = new WebSocketServer({ port: PORT });
+
+// Servidor HTTP real por debajo del WebSocket -- Railway (y cualquier proxy
+// delante del servicio) manda pings "GET /" para confirmar que el contenedor
+// sigue vivo. Antes esto usaba `new WebSocketServer({ port: PORT })`, que
+// crea su PROPIO http.Server interno sin ningún handler de request: un GET
+// normal se queda colgado para siempre (nadie llama a res.end()), hasta que
+// el proxy lo corta por timeout (confirmado en los Network Logs de Railway:
+// "GET /" con HTTP Status 0 y duraciones de hasta 1m+). Si Railway interpreta
+// esos timeouts como que el servicio no responde, puede reiniciar el
+// contenedor -- y como no hay reconexión (ver Room.jugadorDesconectado: "sin
+// reconexión en esta etapa"), eso corta TODAS las partidas en curso de golpe,
+// sin aviso a los jugadores.
+const httpServer = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Truco Argentino backend OK');
+});
+
+const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (ws) => {
   manejarConexion(roomManager, ws);
 });
 
-wss.on('listening', () => {
+httpServer.listen(PORT, () => {
   console.log(`[server] Truco Argentino backend escuchando en ws://localhost:${PORT}`);
 });
 
