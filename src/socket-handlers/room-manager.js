@@ -501,15 +501,24 @@ class RoomManager {
   }
 
   // Reenvía una seña (gesto facial deliberado del sistema real de señas,
-  // 2v2 online) de ws al resto de la sala — mismo criterio que ojos()/
-  // mirar(): puro relay, no pasa por Partida/PartidaEquipos ni valida
-  // turno. A diferencia de una jugada real, una seña es cosmética del lado
-  // del servidor: no hay nada que validar más allá de quién la mandó. El
-  // asiento SIEMPRE es ws.seat, nunca lo que mande el cliente.
+  // 2v2 online) de ws — A DIFERENCIA de ojos()/mirar() (que sí van a toda
+  // la sala), una seña es secreta entre compañeros: en la mesa real nadie
+  // le tapa la cara al rival, pero acá el "secreto" es justamente el punto
+  // del sistema de señas, así que el servidor solo se la reenvía al asiento
+  // de su mismo equipo (equipoDe = asiento % 2, ver partida_equipos.js),
+  // nunca al equipo rival. Sigue sin pasar por Partida/PartidaEquipos ni
+  // validar turno — el asiento SIEMPRE es ws.seat, nunca lo que mande el
+  // cliente.
   sena(ws, tipo, activo) {
     const room = this.salaDe(ws);
     if (!room || ws.seat === undefined || ws.seat < 0) return;
-    room.broadcast({ type: 'SENA', asiento: ws.seat, tipo: String(tipo || ''), activo: Boolean(activo) });
+    const mensaje = { type: 'SENA', asiento: ws.seat, tipo: String(tipo || ''), activo: Boolean(activo) };
+    const miEquipo = equipoDe(ws.seat);
+    room.asientos.forEach((slot, index) => {
+      if (slot && index !== ws.seat && equipoDe(index) === miEquipo) {
+        enviar(slot.ws, mensaje);
+      }
+    });
   }
 
   // Chat en vivo — mismo criterio que mirar(): puro relay entre los sentados
