@@ -511,18 +511,18 @@ class Partida extends EventEmitter {
   // +1 para el rival si jugadorId se va al mazo mientras todavía tenía
   // derecho a cantar Envido (sección 6 y 10): solo en la ronda 1, sin Envido
   // ya resuelto y sin que el Truco de la mano haya sido respondido. Además,
-  // en ESPERANDO_JUGADA basta con que sea su turno; en RESOLVIENDO_TRUCO el
-  // que responde puede interrumpir con Envido solo si todavía no tiró su
-  // propia carta esta ronda. En RESOLVIENDO_ENVIDO ya hay un Envido en juego
-  // y su costo ya está en _puntosIrseAlMazo. Si el rival ya tiró su carta de
+  // solo cuenta si se va en su turno (ESPERANDO_JUGADA): si le cantaron Truco
+  // (RESOLVIENDO_TRUCO) y se va al mazo, rechazó el Truco y eligió no
+  // interrumpir con Envido, así que vale solo el punto del Truco. En
+  // RESOLVIENDO_ENVIDO ya hay un Envido en juego y su costo ya está en
+  // _puntosIrseAlMazo. Si el rival ya tiró su carta de
   // la ronda 1 sin cantar Envido, eligió no cantarlo: el punto no corresponde
   // (ej. Mano tira y Pie se va al mazo = 1).
   _puntosEnvidoNoJugado(jugadorId, estado) {
     if (this.rondaActual !== 1 || this.envidoResuelto || this._trucoYaRespondido) return 0;
     if (this._cartasJugadasRonda[this.rival(jugadorId)]) return 0;
-    if (estado === Estado.ESPERANDO_JUGADA) return jugadorId === this.turnoActual ? 1 : 0;
-    if (estado === Estado.RESOLVIENDO_TRUCO) return this._cartasJugadasRonda[jugadorId] ? 0 : 1;
-    return 0;
+    if (estado !== Estado.ESPERANDO_JUGADA) return 0;
+    return jugadorId === this.turnoActual ? 1 : 0;
   }
 
   // Cuántos puntos se lleva el rival si jugadorId se va al mazo AHORA MISMO

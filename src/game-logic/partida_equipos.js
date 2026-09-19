@@ -652,11 +652,11 @@ class PartidaEquipos extends EventEmitter {
   // +1 para el equipo rival si el equipo de asiento abandona la mano mientras
   // todavía había derecho a cantar Envido (sección 6 y 10): solo en la ronda
   // 1, sin Envido ya resuelto y sin que el Truco de la mano haya sido
-  // respondido. En ESPERANDO_JUGADA basta con que sea el turno del asiento
-  // que se va; en RESOLVIENDO_TRUCO, el que responde puede interrumpir con
-  // Envido solo si todavía no tiró su propia carta esta ronda. En
-  // RESOLVIENDO_ENVIDO ya hay un Envido en juego y su costo ya está en
-  // _puntosIrseAlMazo. El punto es del equipo rival (el que cobra) y solo
+  // respondido. Solo cuenta si el asiento se va en su turno
+  // (ESPERANDO_JUGADA): si le cantaron Truco (RESOLVIENDO_TRUCO) y se va al
+  // mazo, rechazó el Truco y eligió no interrumpir con Envido, así que vale
+  // solo el punto del Truco. En RESOLVIENDO_ENVIDO ya hay un Envido en juego
+  // y su costo ya está en _puntosIrseAlMazo. El punto es del equipo rival (el que cobra) y solo
   // corresponde si alguno de sus jugadores todavía podía cantar Envido: uno
   // que sigue en la mano y aún no tiró su carta de la ronda 1. Si TODOS los
   // suyos ya tiraron (o se fueron) sin cantar, eligieron no cantarlo.
@@ -669,9 +669,8 @@ class PartidaEquipos extends EventEmitter {
       }
     }
     if (!alguienPodiaCantar) return 0;
-    if (estado === Estado.ESPERANDO_JUGADA) return asiento === this.turnoActual ? 1 : 0;
-    if (estado === Estado.RESOLVIENDO_TRUCO) return this._cartasJugadasRonda[asiento] ? 0 : 1;
-    return 0;
+    if (estado !== Estado.ESPERANDO_JUGADA) return 0;
+    return asiento === this.turnoActual ? 1 : 0;
   }
 
   // Cuántos puntos se lleva el equipo rival si los 2 jugadores del equipo de
