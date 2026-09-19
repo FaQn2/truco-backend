@@ -618,8 +618,13 @@ class PartidaEquipos extends EventEmitter {
       // (sección 10: "si todos los jugadores del equipo se van al mazo,
       // pierden todos los puntos pendientes") — con el mismo costo que
       // tendría decir "No Quiero" si había un Envido/Truco sin responder.
+      // Además, +1 por el Envido no jugado si todavía se podía cantar (dos
+      // puntuaciones independientes que se suman, no "irse al mazo vale 2").
       const rival = this.rivalEquipo(miEquipo);
-      this._sumarPuntos(rival, this._puntosIrseAlMazo(estado));
+      this._sumarPuntos(
+        rival,
+        this._puntosIrseAlMazo(estado) + this._puntosEnvidoNoJugado(asiento, estado)
+      );
       this._finDeMano(rival);
       return true;
     }
@@ -642,6 +647,21 @@ class PartidaEquipos extends EventEmitter {
       this.emit('turnoCambiado', this.turnoActual);
     }
     return true;
+  }
+
+  // +1 para el equipo rival si el equipo de asiento abandona la mano mientras
+  // todavía había derecho a cantar Envido (sección 6 y 10): solo en la ronda
+  // 1, sin Envido ya resuelto y sin que el Truco de la mano haya sido
+  // respondido. En ESPERANDO_JUGADA basta con que sea el turno del asiento
+  // que se va; en RESOLVIENDO_TRUCO, el que responde puede interrumpir con
+  // Envido solo si todavía no tiró su propia carta esta ronda. En
+  // RESOLVIENDO_ENVIDO ya hay un Envido en juego y su costo ya está en
+  // _puntosIrseAlMazo.
+  _puntosEnvidoNoJugado(asiento, estado) {
+    if (this.rondaActual !== 1 || this.envidoResuelto || this._trucoYaRespondido) return 0;
+    if (estado === Estado.ESPERANDO_JUGADA) return asiento === this.turnoActual ? 1 : 0;
+    if (estado === Estado.RESOLVIENDO_TRUCO) return this._cartasJugadasRonda[asiento] ? 0 : 1;
+    return 0;
   }
 
   // Cuántos puntos se lleva el equipo rival si los 2 jugadores del equipo de
