@@ -656,9 +656,13 @@ class PartidaEquipos extends EventEmitter {
   // que se va; en RESOLVIENDO_TRUCO, el que responde puede interrumpir con
   // Envido solo si todavía no tiró su propia carta esta ronda. En
   // RESOLVIENDO_ENVIDO ya hay un Envido en juego y su costo ya está en
-  // _puntosIrseAlMazo.
+  // _puntosIrseAlMazo. Si algún jugador del equipo rival ya tiró su carta de
+  // la ronda 1 sin cantar Envido, eligió no cantarlo: el punto no corresponde.
   _puntosEnvidoNoJugado(asiento, estado) {
     if (this.rondaActual !== 1 || this.envidoResuelto || this._trucoYaRespondido) return 0;
+    for (let s = 0; s < NUM_ASIENTOS; s++) {
+      if (equipoDe(s) !== equipoDe(asiento) && this._cartasJugadasRonda[s]) return 0;
+    }
     if (estado === Estado.ESPERANDO_JUGADA) return asiento === this.turnoActual ? 1 : 0;
     if (estado === Estado.RESOLVIENDO_TRUCO) return this._cartasJugadasRonda[asiento] ? 0 : 1;
     return 0;

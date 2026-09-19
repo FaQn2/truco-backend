@@ -514,9 +514,12 @@ class Partida extends EventEmitter {
   // en ESPERANDO_JUGADA basta con que sea su turno; en RESOLVIENDO_TRUCO el
   // que responde puede interrumpir con Envido solo si todavía no tiró su
   // propia carta esta ronda. En RESOLVIENDO_ENVIDO ya hay un Envido en juego
-  // y su costo ya está en _puntosIrseAlMazo.
+  // y su costo ya está en _puntosIrseAlMazo. Si el rival ya tiró su carta de
+  // la ronda 1 sin cantar Envido, eligió no cantarlo: el punto no corresponde
+  // (ej. Mano tira y Pie se va al mazo = 1).
   _puntosEnvidoNoJugado(jugadorId, estado) {
     if (this.rondaActual !== 1 || this.envidoResuelto || this._trucoYaRespondido) return 0;
+    if (this._cartasJugadasRonda[this.rival(jugadorId)]) return 0;
     if (estado === Estado.ESPERANDO_JUGADA) return jugadorId === this.turnoActual ? 1 : 0;
     if (estado === Estado.RESOLVIENDO_TRUCO) return this._cartasJugadasRonda[jugadorId] ? 0 : 1;
     return 0;
