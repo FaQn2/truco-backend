@@ -155,6 +155,13 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.sena(ws, mensaje.tipo, mensaje.activo);
       return;
 
+    // A quién está mirando el jugador (torso/cabeza, 2v2 online): decide qué
+    // señas ve y avisa a la mesa (ojito en el nametag + "te mira"). Mismo
+    // patrón que SENA: cosmético, no pasa por Partida/PartidaEquipos.
+    case 'OBSERVAR':
+      roomManager.observar(ws, mensaje.objetivo);
+      return;
+
     // Chat en vivo entre los jugadores sentados en la sala — mismo patrón
     // que MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
     case 'CHAT_MENSAJE':

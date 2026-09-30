@@ -55,6 +55,18 @@ function enviar(ws, mensaje) {
   }
 }
 
+// ¿El asiento `verSeat` ve las señas del asiento `emisorSeat`? Regla 2v2:
+// se ve la seña de UNA sola persona a la vez — la que el espectador está
+// observando (hitbox torso/cabeza). Si no observa a nadie (objetivo < 0) ve
+// a su compañero por defecto. Mirar a un rival = dejar de ver al compañero.
+// `objetivo` se pasa explícito (en vez de leerlo del slot) para poder
+// comparar "antes" y "después" de un cambio de observación.
+function puedeVerSena(verSeat, emisorSeat, objetivo) {
+  if (verSeat === emisorSeat) return false;
+  if (objetivo >= 0) return objetivo === emisorSeat;
+  return equipoDe(verSeat) === equipoDe(emisorSeat);
+}
+
 class Room {
   constructor(code, { nombreSala, modo, puntosObjetivo = PUNTOS_OBJETIVO_DEFAULT }) {
     this.code = code;
@@ -65,6 +77,11 @@ class Room {
     this.estado = 'esperando'; // 'esperando' | 'completa' | 'jugando'
     // índice de asiento (0..capacidad-1) -> { ws, nombre } | null
     this.asientos = new Array(this.capacidad).fill(null);
+    // índice de asiento -> clave de la seña que ese asiento tiene activa ahora
+    // (null si ninguna). Solo 2v2: el servidor la necesita para poder
+    // mostrarle o esconderle la seña a alguien que EMPIEZA o DEJA de
+    // observar a ese asiento con la seña ya en curso (ver observar()).
+    this.senasActivas = new Array(this.capacidad).fill(null);
     // Sockets mirando el panel de detalle de esta sala (incluye a los
     // sentados) — reciben DETALLE_SALA cada vez que cambia algo.
     this.viewers = new Set();
@@ -118,9 +135,15 @@ class Room {
 
     // Si ya estaba sentado en otro asiento de esta misma sala, lo libera.
     const anterior = this.asientoDe(ws);
-    if (anterior !== -1) this.asientos[anterior] = null;
+    if (anterior !== -1) {
+      this.asientos[anterior] = null;
+      this.senasActivas[anterior] = null;
+    }
 
-    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}` };
+    // observando = asiento que este jugador está mirando (hitbox torso/cabeza,
+    // solo 2v2), -1 si a nadie. Vive en el slot (no en ws) para que se
+    // reinicie solo cada vez que alguien se sienta o se levanta.
+    this.asientos[index] = { ws, nombre: nombre || `Jugador${index + 1}`, observando: -1 };
     ws.seat = index;
     this.agregarViewer(ws);
 
@@ -134,6 +157,7 @@ class Room {
     const index = this.asientoDe(ws);
     if (index === -1) return;
     this.asientos[index] = null;
+    this.senasActivas[index] = null;
     if (this.estado === 'completa') this.estado = 'esperando';
   }
 
@@ -144,6 +168,7 @@ class Room {
     const index = this.asientoDe(ws);
     if (index !== -1) {
       this.asientos[index] = null;
+      this.senasActivas[index] = null;
       if (this.estado === 'completa') this.estado = 'esperando';
     }
     this.viewers.delete(ws);
@@ -502,23 +527,56 @@ class RoomManager {
 
   // Reenvía una seña (gesto facial deliberado del sistema real de señas,
   // 2v2 online) de ws — A DIFERENCIA de ojos()/mirar() (que sí van a toda
-  // la sala), una seña es secreta entre compañeros: en la mesa real nadie
-  // le tapa la cara al rival, pero acá el "secreto" es justamente el punto
-  // del sistema de señas, así que el servidor solo se la reenvía al asiento
-  // de su mismo equipo (equipoDe = asiento % 2, ver partida_equipos.js),
-  // nunca al equipo rival. Sigue sin pasar por Partida/PartidaEquipos ni
-  // validar turno — el asiento SIEMPRE es ws.seat, nunca lo que mande el
-  // cliente.
+  // la sala), una seña solo la ve quien corresponde según puedeVerSena():
+  // cada jugador ve las señas de UNA persona a la vez (la que observa; por
+  // defecto, su compañero). Un rival solo la ve si está mirando a ws en ese
+  // momento. Sigue sin pasar por Partida/PartidaEquipos ni validar turno —
+  // el asiento SIEMPRE es ws.seat, nunca lo que mande el cliente. Guarda la
+  // seña activa en room.senasActivas para que observar() pueda mostrarla/
+  // esconderla si alguien cambia de objetivo con la seña ya en curso.
   sena(ws, tipo, activo) {
     const room = this.salaDe(ws);
     if (!room || ws.seat === undefined || ws.seat < 0) return;
-    const mensaje = { type: 'SENA', asiento: ws.seat, tipo: String(tipo || ''), activo: Boolean(activo) };
-    const miEquipo = equipoDe(ws.seat);
+    const clave = String(tipo || '');
+    const estaActiva = Boolean(activo);
+    room.senasActivas[ws.seat] = estaActiva && clave ? clave : null;
+    const mensaje = { type: 'SENA', asiento: ws.seat, tipo: clave, activo: estaActiva };
     room.asientos.forEach((slot, index) => {
-      if (slot && index !== ws.seat && equipoDe(index) === miEquipo) {
+      if (slot && puedeVerSena(index, ws.seat, slot.observando)) {
         enviar(slot.ws, mensaje);
       }
     });
+  }
+
+  // Indicador de observación (2v2): ws pasa a mirar el torso/cabeza del
+  // asiento `objetivo` (o a nadie, objetivo -1). Se avisa a TODA la sala
+  // (OBSERVANDO) porque es público a propósito: el observado recibe el
+  // aviso "X te mira" y en la mesa todos ven el ojito sobre su nametag.
+  // Además cambia qué señas ve ws: las que dejan de ser visibles se apagan y
+  // las que pasan a serlo (si ya estaban activas) se encienden. El asiento
+  // observador SIEMPRE es ws.seat; el objetivo se sanea acá.
+  observar(ws, objetivo) {
+    const room = this.salaDe(ws);
+    if (!room || room.capacidad !== 4 || ws.seat === undefined || ws.seat < 0) return;
+    const slot = room.asientos[ws.seat];
+    if (!slot) return;
+
+    let nuevo = Number.isInteger(objetivo) ? objetivo : -1;
+    if (nuevo < 0 || nuevo >= room.capacidad || nuevo === ws.seat || !room.asientos[nuevo]) nuevo = -1;
+    const anterior = slot.observando;
+    if (anterior === nuevo) return;
+    slot.observando = nuevo;
+
+    room.senasActivas.forEach((clave, emisor) => {
+      if (!clave) return;
+      const antes = puedeVerSena(ws.seat, emisor, anterior);
+      const ahora = puedeVerSena(ws.seat, emisor, nuevo);
+      if (antes !== ahora) {
+        enviar(ws, { type: 'SENA', asiento: emisor, tipo: clave, activo: ahora });
+      }
+    });
+
+    room.broadcast({ type: 'OBSERVANDO', asiento: ws.seat, objetivo: nuevo });
   }
 
   // Chat en vivo — mismo criterio que mirar(): puro relay entre los sentados
