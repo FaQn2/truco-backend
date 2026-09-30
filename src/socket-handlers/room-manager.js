@@ -56,15 +56,13 @@ function enviar(ws, mensaje) {
 }
 
 // ¿El asiento `verSeat` ve las señas del asiento `emisorSeat`? Regla 2v2:
-// se ve la seña de UNA sola persona a la vez — la que el espectador está
-// observando (hitbox torso/cabeza). Si no observa a nadie (objetivo < 0) ve
-// a su compañero por defecto. Mirar a un rival = dejar de ver al compañero.
+// las señas de TODOS (compañero y rivales por igual) se ven únicamente
+// mientras se los mira (hitbox torso/cabeza), y de a una persona por vez —
+// sin mirar a nadie (objetivo < 0) no se ve ninguna seña.
 // `objetivo` se pasa explícito (en vez de leerlo del slot) para poder
 // comparar "antes" y "después" de un cambio de observación.
 function puedeVerSena(verSeat, emisorSeat, objetivo) {
-  if (verSeat === emisorSeat) return false;
-  if (objetivo >= 0) return objetivo === emisorSeat;
-  return equipoDe(verSeat) === equipoDe(emisorSeat);
+  return verSeat !== emisorSeat && objetivo === emisorSeat;
 }
 
 class Room {
@@ -528,9 +526,8 @@ class RoomManager {
   // Reenvía una seña (gesto facial deliberado del sistema real de señas,
   // 2v2 online) de ws — A DIFERENCIA de ojos()/mirar() (que sí van a toda
   // la sala), una seña solo la ve quien corresponde según puedeVerSena():
-  // cada jugador ve las señas de UNA persona a la vez (la que observa; por
-  // defecto, su compañero). Un rival solo la ve si está mirando a ws en ese
-  // momento. Sigue sin pasar por Partida/PartidaEquipos ni validar turno —
+  // cada jugador ve las señas de UNA persona a la vez — la que está mirando
+  // (sea compañero o rival); a quien no mira, no le ve las señas. Sigue sin pasar por Partida/PartidaEquipos ni validar turno —
   // el asiento SIEMPRE es ws.seat, nunca lo que mande el cliente. Guarda la
   // seña activa en room.senasActivas para que observar() pueda mostrarla/
   // esconderla si alguien cambia de objetivo con la seña ya en curso.
