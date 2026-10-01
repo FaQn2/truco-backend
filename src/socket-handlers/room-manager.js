@@ -156,7 +156,8 @@ class Room {
   // ws.seat y le avisa a cada uno su asiento final con ASIENTO_CONFIRMADO (el
   // cliente lo guarda en NetworkClient.mi_asiento antes de PARTIDA_INICIADA).
   // En 2v2 el asiento define el equipo (asiento % 2), así que también sortea
-  // los equipos. NO se llama en la revancha: ahí cada uno conserva su silla.
+  // los equipos. En la revancha solo se llama en 1v1 (ver confirmarRevancha):
+  // en 2v2 cada uno conserva su silla y su equipo.
   sortearAsientos() {
     for (let i = this.asientos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -279,6 +280,11 @@ class Room {
       // habilitar tanto partidaTerminada como el chequeo de abandono en
       // salirSala() para la partida NUEVA que arranca ahora.
       this.partidaTerminada = false;
+      // En 1v1 se vuelven a sortear las sillas (el que arranca de "Jugador"
+      // puede pasar a "Oponente"): el cliente se entera por ASIENTO_CONFIRMADO,
+      // que llega antes que PARTIDA_INICIADA. En 2v2 se conservan sillas y
+      // equipos, porque sortear cambiaría quién juega con quién.
+      if (this.capacidad === 2) this.sortearAsientos();
       this.iniciarPartida();
     }
     return true;
