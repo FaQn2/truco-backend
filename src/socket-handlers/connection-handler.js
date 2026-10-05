@@ -168,6 +168,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.chat(ws, mensaje.texto);
       return;
 
+    // Renombrar el equipo (2v2, una vez por partida) — relay validado en el
+    // servidor, no pasa por PartidaEquipos.
+    case 'NOMBRE_EQUIPO':
+      roomManager.nombreEquipo(ws, mensaje.texto);
+      return;
+
     default:
       if (ACCIONES_DE_JUEGO.has(mensaje.type)) {
         manejarAccionDeJuego(roomManager, ws, mensaje);

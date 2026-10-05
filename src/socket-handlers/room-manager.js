@@ -20,6 +20,8 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const PUNTOS_OBJETIVO_DEFAULT = 30;
 const CHAT_LARGO_MAXIMO = 200;
+// Largo máximo del nombre de equipo 2v2 (debe coincidir con el LineEdit del cliente).
+const NOMBRE_EQUIPO_LARGO_MAXIMO = 18;
 // "¡Revancha!" — ventana para que todos los sentados confirmen que quieren
 // otra partida antes de que el server dé la sala por perdida y mande a
 // todos de vuelta al lobby (ver Room.iniciarRevancha).
@@ -101,6 +103,12 @@ class Room {
     // borra sola, ver RoomManager.salirSala) y que se resuelva (todos
     // confirman, se acaba el tiempo, o alguien se desconecta).
     this.revancha = null;
+
+    // Nombre personalizado de cada equipo 2v2 (índice = equipoDe(asiento)),
+    // null = el default ("Nosotros"/"Ellos", lo resuelve cada cliente). Cada
+    // equipo puede renombrarse UNA sola vez por partida; se reinicia en
+    // _iniciarPartidaEquipos (también cubre la revancha).
+    this.nombresEquipo = [null, null];
   }
 
   ocupados() {
@@ -371,6 +379,7 @@ class Room {
   // nuevos (manoCompanero, ganadorEquipo, puntosEquipoA/B) o mensajes nuevos
   // (la fase de declaración de envido en cadena, sección 17).
   _iniciarPartidaEquipos() {
+    this.nombresEquipo = [null, null];
     this.partida = new PartidaEquipos(this.puntosObjetivo);
     const partida = this.partida;
     const companeroDe = (asiento) => partida.companeroDe(asiento);
@@ -613,6 +622,34 @@ class RoomManager {
     if (!limpio) return;
     const nombre = room.asientos[ws.seat]?.nombre || `Jugador${ws.seat + 1}`;
     room.broadcast({ type: 'CHAT_MENSAJE', asiento: ws.seat, nombre, texto: limpio });
+  }
+
+  // Renombra el equipo de ws (solo 2v2, partida en curso). Una vez por equipo
+  // y por partida: el primer NOMBRE_EQUIPO válido de cualquiera de los dos
+  // compañeros gasta el cambio. El equipo SIEMPRE sale del asiento del
+  // servidor (ws.seat), nunca de lo que mande el cliente. Se avisa a toda la
+  // sala con el equipo ABSOLUTO (0/1); cada cliente decide si es el suyo.
+  nombreEquipo(ws, texto) {
+    const room = this.salaDe(ws);
+    if (!room || room.capacidad !== 4 || !room.partida || room.partidaTerminada) return;
+    if (ws.seat === undefined || ws.seat < 0 || !room.asientos[ws.seat]) return;
+
+    const equipo = equipoDe(ws.seat);
+    if (room.nombresEquipo[equipo] !== null) {
+      enviar(ws, { type: 'ERROR', message: 'Tu equipo ya cambió de nombre en esta partida.' });
+      return;
+    }
+    // Sin caracteres de control, espacios colapsados, máx. NOMBRE_EQUIPO_LARGO_MAXIMO.
+    const limpio = String(texto || '')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, NOMBRE_EQUIPO_LARGO_MAXIMO)
+      .trim();
+    if (!limpio) return;
+
+    room.nombresEquipo[equipo] = limpio;
+    room.broadcast({ type: 'NOMBRE_EQUIPO', equipo, asiento: ws.seat, texto: limpio });
   }
 
   // Saca a ws de la sala que esté viendo/ocupando (si hay alguna). La usan
