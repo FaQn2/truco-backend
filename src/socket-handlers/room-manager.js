@@ -20,6 +20,13 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const PUNTOS_OBJETIVO_DEFAULT = 30;
 const CHAT_LARGO_MAXIMO = 200;
+
+// Emotes de la rueda (ver emote()). Lista blanca: el servidor solo reenvía estas
+// claves, que son las mismas de AnimationManager.EMOTES en el cliente. Para sumar
+// un emote hay que agregarlo acá también.
+const EMOTES_PERMITIDOS = new Set(['dedo', 'pulgar', 'guitarra']);
+// Enfriamiento por jugador: evita que un cliente spamee emotes a la sala.
+const EMOTE_ENFRIAMIENTO_MS = 800;
 // Largo máximo del nombre de equipo 2v2 (debe coincidir con el LineEdit del cliente).
 const NOMBRE_EQUIPO_LARGO_MAXIMO = 18;
 // "¡Revancha!" — ventana para que todos los sentados confirmen que quieren
@@ -622,6 +629,22 @@ class RoomManager {
     if (!limpio) return;
     const nombre = room.asientos[ws.seat]?.nombre || `Jugador${ws.seat + 1}`;
     room.broadcast({ type: 'CHAT_MENSAJE', asiento: ws.seat, nombre, texto: limpio });
+  }
+
+  // Emote de la rueda de emotes: mismo criterio que mirar()/ojos(): puro relay
+  // cosmético a toda la sala, no pasa por Partida/PartidaEquipos ni valida turno.
+  // El asiento SIEMPRE es ws.seat; la clave tiene que estar en la lista blanca y
+  // hay un enfriamiento por jugador. Solo con partida en curso.
+  emote(ws, clave) {
+    const room = this.salaDe(ws);
+    if (!room || !room.partida || room.partidaTerminada) return;
+    if (ws.seat === undefined || ws.seat < 0 || !room.asientos[ws.seat]) return;
+    const emote = String(clave || '');
+    if (!EMOTES_PERMITIDOS.has(emote)) return;
+    const ahora = Date.now();
+    if (ws.ultimoEmoteMs && ahora - ws.ultimoEmoteMs < EMOTE_ENFRIAMIENTO_MS) return;
+    ws.ultimoEmoteMs = ahora;
+    room.broadcast({ type: 'EMOTE', asiento: ws.seat, emote });
   }
 
   // Renombra el equipo de ws (solo 2v2, partida en curso). Una vez por equipo

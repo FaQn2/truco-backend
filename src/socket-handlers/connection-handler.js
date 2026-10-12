@@ -168,6 +168,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.chat(ws, mensaje.texto);
       return;
 
+    // Emote de la rueda (1v1/2v2) — mismo patrón que SENA/OJOS: cosmético, puro
+    // relay validado (lista blanca + enfriamiento), no pasa por Partida.
+    case 'EMOTE':
+      roomManager.emote(ws, mensaje.emote);
+      return;
+
     // Renombrar el equipo (2v2, una vez por partida) — relay validado en el
     // servidor, no pasa por PartidaEquipos.
     case 'NOMBRE_EQUIPO':
