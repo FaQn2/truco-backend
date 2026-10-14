@@ -70,7 +70,15 @@ function enviar(ws, mensaje) {
 // sin mirar a nadie (objetivo < 0) no se ve ninguna seña.
 // `objetivo` se pasa explícito (en vez de leerlo del slot) para poder
 // comparar "antes" y "después" de un cambio de observación.
+//
+// DESHABILITADO (2026-10-14, pedido del usuario): con FILTRO_SENAS_POR_MIRADA
+// en false TODOS ven las señas de TODOS (menos la propia: el emisor ya la
+// aplicó local). Poner en true para volver a la regla de "solo me ve quien me
+// mira" — el resto del código (observar(), OBSERVANDO) sigue intacto.
+const FILTRO_SENAS_POR_MIRADA = false;
+
 function puedeVerSena(verSeat, emisorSeat, objetivo) {
+  if (!FILTRO_SENAS_POR_MIRADA) return verSeat !== emisorSeat;
   return verSeat !== emisorSeat && objetivo === emisorSeat;
 }
 
@@ -596,6 +604,9 @@ class RoomManager {
   observar(ws, objetivo) {
     const room = this.salaDe(ws);
     if (!room || room.capacidad !== 4 || ws.seat === undefined || ws.seat < 0) return;
+    // Sin filtro por mirada no hay indicador de observación: no se difunde
+    // OBSERVANDO (ni "X te mira" ni ojitos en el cliente).
+    if (!FILTRO_SENAS_POR_MIRADA) return;
     const slot = room.asientos[ws.seat];
     if (!slot) return;
 
