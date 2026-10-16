@@ -464,13 +464,15 @@ class PartidaEquipos extends EventEmitter {
     } else {
       puntos = this._cadenaEnvido.reduce((acc, canto) => acc + (Constants.PUNTOS_ENVIDO[canto] || 0), 0);
     }
-    this._sumarPuntos(equipoGanador, puntos);
+    // envidoTerminado ANTES de sumar (ver partida.js): el cliente retiene este
+    // mensaje y los siguientes para que se vea la última declaración.
     this.emit('envidoTerminado', {
       declaraciones: { ...this._declaraciones },
       ganadorEquipo: equipoGanador,
       puntosEnJuego: puntos,
       revelado: true,
     });
+    this._sumarPuntos(equipoGanador, puntos);
     this._cerrarEnvido();
   }
 

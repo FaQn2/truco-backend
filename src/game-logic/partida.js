@@ -347,8 +347,12 @@ class Partida extends EventEmitter {
       } else {
         puntos = this._cadenaEnvido.reduce((acc, canto) => acc + (Constants.PUNTOS_ENVIDO[canto] || 0), 0);
       }
-      this._sumarPuntos(ganador, puntos);
+      // envidoTerminado ANTES de sumar: el cliente retiene ENVIDO_TERMINADO y todo
+      // lo que viene detrás unos segundos para que las burbujas canten los
+      // puntos; si PUNTOS_ACTUALIZADOS viajara primero, el contador se
+      // adelantaría a las burbujas.
       this.emit('envidoTerminado', { puntosJ1: ptsJ1, puntosJ2: ptsJ2, ganador, puntosEnJuego: puntos, revelado: true });
+      this._sumarPuntos(ganador, puntos);
       ganadorEnvido = ganador;
     } else {
       // No querido: 1 punto por cada canto de la cadena (sección 6 y 11),
