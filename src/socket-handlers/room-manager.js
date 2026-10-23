@@ -434,7 +434,7 @@ class Room {
       [JUGADOR1]: this.asientos[JUGADOR1]?.nombre,
       [JUGADOR2]: this.asientos[JUGADOR2]?.nombre,
     };
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, sillaBase: Math.floor(Math.random() * 4) });
     partida.iniciarPartida();
   }
 
@@ -515,7 +515,7 @@ class Room {
     for (let asiento = 0; asiento < 4; asiento++) {
       nombres[asiento] = this.asientos[asiento]?.nombre;
     }
-    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres });
+    this.broadcast({ type: 'PARTIDA_INICIADA', modo: this.modo, puntosObjetivo: this.puntosObjetivo, nombres, sillaBase: Math.floor(Math.random() * 4) });
     partida.iniciarPartida();
   }
 }
