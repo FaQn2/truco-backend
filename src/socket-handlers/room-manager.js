@@ -82,6 +82,53 @@ function puedeVerSena(verSeat, emisorSeat, objetivo) {
   return verSeat !== emisorSeat && objetivo === emisorSeat;
 }
 
+// Eventos de la pulpería (gurí, hornero, pombero, marcianito). Los sortea el
+// servidor UNA vez por partida y los dispara con EVENTO_PULPERIA al cerrar cada
+// mano, así los ven todos los jugadores a la vez (antes cada cliente sorteaba
+// los suyos). Mismos valores que mesa_visual*.gd offline. El gurí entra desde la
+// mano 2 (al cerrar la mano 1): si entrara "antes de repartir", el mensaje
+// llegaría mientras los clientes todavía cargan la escena y se perdería.
+const MANOS_POR_HORNERO = 11;
+const GURI_MANO_MIN = 2;
+const GURI_MANO_MAX = 22;
+const POMBERO_CHANCE = 0.07;
+const POMBERO_MANO_MIN = 2;
+const POMBERO_MANO_MAX = 8;
+const MARCIANITO_CHANCE = 0.04;
+
+function enteroEntre(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function crearPlanEventos() {
+  return {
+    manosCerradas: 0,
+    manoGuri: enteroEntre(GURI_MANO_MIN, GURI_MANO_MAX),
+    manoPombero: Math.random() < POMBERO_CHANCE ? enteroEntre(POMBERO_MANO_MIN, POMBERO_MANO_MAX) : -1,
+    pomberoEnviado: false,
+    marcianitoUsado: false,
+  };
+}
+
+// Qué eventos tocan al cerrarse una mano (en el orden en que se disparan).
+function eventosAlCerrarMano(plan) {
+  plan.manosCerradas++;
+  const n = plan.manosCerradas;
+  const eventos = [];
+  if (n % MANOS_POR_HORNERO === 0) {
+    eventos.push('hornero');
+  } else if (!plan.marcianitoUsado && Math.random() < MARCIANITO_CHANCE) {
+    plan.marcianitoUsado = true;
+    eventos.push('marcianito');
+  }
+  if (n === plan.manoGuri - 1) eventos.push('guri');
+  if (!plan.pomberoEnviado && plan.manoPombero > 0 && n >= plan.manoPombero) {
+    plan.pomberoEnviado = true;
+    eventos.push('pombero');
+  }
+  return eventos;
+}
+
 class Room {
   constructor(code, { nombreSala, modo, puntosObjetivo = PUNTOS_OBJETIVO_DEFAULT }) {
     this.code = code;
@@ -352,8 +399,12 @@ class Room {
       this.broadcast({ type: 'RONDA_RESUELTA', ganador, parda });
     });
 
+    const planEventos = crearPlanEventos();
     partida.on('manoTerminada', (ganador) => {
       this.broadcast({ type: 'MANO_TERMINADA', ganador });
+      for (const nombre of eventosAlCerrarMano(planEventos)) {
+        this.broadcast({ type: 'EVENTO_PULPERIA', nombre });
+      }
     });
 
     partida.on('partidaTerminada', (ganador) => {
@@ -422,8 +473,12 @@ class Room {
       this.broadcast({ type: 'RONDA_RESUELTA', ganadorEquipo, parda });
     });
 
+    const planEventos = crearPlanEventos();
     partida.on('manoTerminada', (ganadorEquipo) => {
       this.broadcast({ type: 'MANO_TERMINADA', ganadorEquipo });
+      for (const nombre of eventosAlCerrarMano(planEventos)) {
+        this.broadcast({ type: 'EVENTO_PULPERIA', nombre });
+      }
     });
 
     partida.on('partidaTerminada', (ganadorEquipo) => {
