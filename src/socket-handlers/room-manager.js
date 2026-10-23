@@ -225,9 +225,8 @@ class Room {
   // en el lobby solo reserva lugar). Mezcla Fisher-Yates los slots, actualiza
   // ws.seat y le avisa a cada uno su asiento final con ASIENTO_CONFIRMADO (el
   // cliente lo guarda en NetworkClient.mi_asiento antes de PARTIDA_INICIADA).
-  // En 2v2 el asiento define el equipo (asiento % 2), así que también sortea
-  // los equipos. En la revancha solo se llama en 1v1 (ver confirmarRevancha):
-  // en 2v2 cada uno conserva su silla y su equipo.
+  // Solo se usa en 1v1 (al arrancar y en la revancha): en 2v2 el asiento define
+  // el equipo (asiento % 2) y cada uno conserva la silla que eligió en el lobby.
   sortearAsientos() {
     for (let i = this.asientos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -586,7 +585,11 @@ class RoomManager {
     room.broadcastLobby({ type: 'DETALLE_SALA', ...room.snapshot() });
 
     if (room.estado === 'jugando') {
-      room.sortearAsientos();
+      // 2v2: el asiento elegido en el lobby define el equipo (asiento % 2) y el
+      // compañero (el de enfrente), así que se respeta tal cual: sortear acá le
+      // cambiaba el compañero a quien se había sentado para jugar con alguien.
+      // 1v1: la silla no importa, se sortea quién queda de "Jugador".
+      if (room.capacidad === 2) room.sortearAsientos();
       room.iniciarPartida();
     }
   }
