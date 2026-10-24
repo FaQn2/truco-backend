@@ -408,7 +408,10 @@ class Room {
 
     partida.on('partidaTerminada', (ganador) => {
       this.partidaTerminada = true;
-      this.broadcast({ type: 'PARTIDA_TERMINADA', ganador });
+      // Con la partida terminada ya no hay nada que ocultar: se mandan las cartas
+      // que a cada asiento le quedaron sin jugar para que, al tirarlas sobre la
+      // mesa en la celebración, todos las vean. Solo cosmético.
+      this.broadcast({ type: 'PARTIDA_TERMINADA', ganador, manos: { 0: partida.mano[JUGADOR1], 1: partida.mano[JUGADOR2] } });
       this.iniciarRevancha();
     });
 
@@ -482,7 +485,8 @@ class Room {
 
     partida.on('partidaTerminada', (ganadorEquipo) => {
       this.partidaTerminada = true;
-      this.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo });
+      // Ver el comentario de _iniciarPartida1v1: cartas sin jugar de cada asiento.
+      this.broadcast({ type: 'PARTIDA_TERMINADA', ganadorEquipo, manos: { 0: partida.mano[0], 1: partida.mano[1], 2: partida.mano[2], 3: partida.mano[3] } });
       this.iniciarRevancha();
     });
 
