@@ -634,6 +634,15 @@ class RoomManager {
     room.broadcast({ type: 'OJOS', asiento: ws.seat, activo: Boolean(activo) });
   }
 
+  // Reenvía "estoy mirando mis cartas" (hover del mouse sobre la mano) de ws al
+  // resto de la sala. Mismo criterio que ojos(): relay puro, el asiento SIEMPRE
+  // es ws.seat.
+  ojosCartas(ws, activo) {
+    const room = this.salaDe(ws);
+    if (!room || ws.seat === undefined || ws.seat < 0) return;
+    room.broadcast({ type: 'OJOS_CARTAS', asiento: ws.seat, activo: Boolean(activo) });
+  }
+
   // Reenvía una seña (gesto facial deliberado del sistema real de señas,
   // 2v2 online) de ws — A DIFERENCIA de ojos()/mirar() (que sí van a toda
   // la sala), una seña solo la ve quien corresponde según puedeVerSena():

@@ -149,6 +149,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.ojos(ws, mensaje.activo);
       return;
 
+    // Cosmético: el jugador pasa el mouse sobre sus cartas y su personaje las
+    // mira. Puro relay, igual que OJOS.
+    case 'OJOS_CARTAS':
+      roomManager.ojosCartas(ws, mensaje.activo);
+      return;
+
     // Seña real de Truco (gesto facial deliberado, 2v2 online) — mismo
     // patrón que OJOS/MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
     case 'SENA':
