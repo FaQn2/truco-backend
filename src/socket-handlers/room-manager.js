@@ -643,6 +643,16 @@ class RoomManager {
     room.broadcast({ type: 'OJOS_CARTAS', asiento: ws.seat, activo: Boolean(activo) });
   }
 
+  // Reenvía "voy a cancherear": el jugador va a tirar el Uno de Espadas con el
+  // gesto de ponérselo en la frente (opcional). Se manda justo antes de su
+  // JUGAR_CARTA, así los demás clientes saben qué animación hacer cuando llegue
+  // el CARTA_JUGADA. Relay puro (cosmético), el asiento SIEMPRE es ws.seat.
+  cancherear(ws) {
+    const room = this.salaDe(ws);
+    if (!room || !room.partida || ws.seat === undefined || ws.seat < 0) return;
+    room.broadcast({ type: 'CANCHEREAR', asiento: ws.seat });
+  }
+
   // Reenvía una seña (gesto facial deliberado del sistema real de señas,
   // 2v2 online) de ws — A DIFERENCIA de ojos()/mirar() (que sí van a toda
   // la sala), una seña solo la ve quien corresponde según puedeVerSena():

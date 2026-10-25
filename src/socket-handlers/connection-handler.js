@@ -155,6 +155,12 @@ function _despacharMensaje(roomManager, ws, mensaje) {
       roomManager.ojosCartas(ws, mensaje.activo);
       return;
 
+    // Cosmético: "voy a cancherear" (tirar el Uno de Espadas poniéndoselo en la
+    // frente). Va justo antes del JUGAR_CARTA. Puro relay, igual que OJOS.
+    case 'CANCHEREAR':
+      roomManager.cancherear(ws);
+      return;
+
     // Seña real de Truco (gesto facial deliberado, 2v2 online) — mismo
     // patrón que OJOS/MIRAR: puro relay, no pasa por Partida/PartidaEquipos.
     case 'SENA':
